@@ -87,7 +87,7 @@ func buildContextRefs(meta IssueMeta) []byte {
 		refs["github_issue"] = meta.GithubIssue
 	}
 	if len(refs) == 0 {
-		return []byte("[]")
+		return []byte("{}")
 	}
 	b, _ := json.Marshal(refs)
 	return b

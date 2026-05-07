@@ -61,8 +61,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	issueFiles, _ := walkMarkdown(*issuesDir)
-	taskFiles, _ := walkMarkdown(*tasksDir)
+	issueFiles, err := walkMarkdown(*issuesDir)
+	if err != nil {
+		slog.Error("cannot read issues dir", "path", *issuesDir, "error", err)
+		os.Exit(1)
+	}
+	taskFiles, err := walkMarkdown(*tasksDir)
+	if err != nil {
+		slog.Error("cannot read tasks dir", "path", *tasksDir, "error", err)
+		os.Exit(1)
+	}
 
 	if len(issueFiles) == 0 && len(taskFiles) == 0 {
 		fmt.Println("No markdown files found in the specified directories.")

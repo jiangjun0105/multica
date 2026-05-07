@@ -143,7 +143,7 @@ func TestBuildContextRefs(t *testing.T) {
 
 	meta2 := IssueMeta{}
 	refs2 := buildContextRefs(meta2)
-	if string(refs2) != "[]" {
-		t.Errorf("context_refs should be [] when no fields set, got %s", string(refs2))
+	if string(refs2) != "{}" {
+		t.Errorf("context_refs should be {} when no fields set, got %s", string(refs2))
 	}
 }
