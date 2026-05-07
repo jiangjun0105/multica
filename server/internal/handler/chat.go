@@ -460,8 +460,8 @@ func (h *Handler) CancelTaskByUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "not your task")
 			return
 		}
-	} else if task.IssueID.Valid {
-		issue, err := h.Queries.GetIssue(r.Context(), task.IssueID)
+	} else if task.TaskID.Valid {
+		issue, err := h.Queries.GetIssue(r.Context(), task.TaskID)
 		if err != nil || uuidToString(issue.WorkspaceID) != workspaceID {
 			writeError(w, http.StatusNotFound, "task not found")
 			return

@@ -48,6 +48,7 @@ func insertIssue(ctx context.Context, pool *pgxpool.Pool, wsID pgtype.UUID, crea
 	}
 
 	var issueID pgtype.UUID
+	position := float64(number)
 	err = pool.QueryRow(ctx,
 		`INSERT INTO issue (
 			workspace_id, title, description, status, priority,
@@ -55,11 +56,11 @@ func insertIssue(ctx context.Context, pool *pgxpool.Pool, wsID pgtype.UUID, crea
 			acceptance_criteria, context_refs, created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5,
-			'member', $6, $7, $7::float,
-			'[]'::jsonb, $8, $9, $9
+			'member', $6, $7, $8,
+			'[]'::jsonb, $9, $10, $10
 		) RETURNING id`,
 		wsID, meta.Title, description, status, priority,
-		creatorID, number, contextRefs, createdAt,
+		creatorID, number, position, contextRefs, createdAt,
 	).Scan(&issueID)
 	if err != nil {
 		return pgtype.UUID{}, fmt.Errorf("insert issue %q: %w", meta.Title, err)

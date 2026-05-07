@@ -1597,7 +1597,7 @@ func (h *Handler) shouldEnqueueOnComment(ctx context.Context, issue db.Issue) bo
 	// picks up new comments on the next cycle) but skip if this agent already
 	// has a pending task (natural dedup for rapid-fire comments).
 	hasPending, err := h.Queries.HasPendingTaskForIssueAndAgent(ctx, db.HasPendingTaskForIssueAndAgentParams{
-		IssueID: issue.ID,
+		TaskID:  issue.ID,
 		AgentID: issue.AssigneeID,
 	})
 	if err != nil || hasPending {
