@@ -141,7 +141,7 @@ type AgentTaskResponse struct {
 	PriorWorkDir            string          `json:"prior_work_dir,omitempty"`            // work_dir from a previous task on same issue
 	TriggerCommentID        *string         `json:"trigger_comment_id,omitempty"`        // comment that triggered this task
 	TriggerCommentContent   string          `json:"trigger_comment_content,omitempty"`   // content of the triggering comment
-	TriggerSummary          *string         `json:"trigger_summary,omitempty"`           // canonical short description snapshot — comment text / autopilot title — taken at task creation; survives source edits/deletes
+	TriggerSummary          *string         `json:"trigger_summary,omitempty"`           // canonical short description snapshot — comment text — taken at task creation; survives source edits/deletes
 	TriggerAuthorType       string          `json:"trigger_author_type,omitempty"`       // "agent" or "member" — author kind of the triggering comment
 	TriggerAuthorName       string          `json:"trigger_author_name,omitempty"`       // display name of the triggering comment author
 	ChatSessionID           string          `json:"chat_session_id,omitempty"`           // non-empty for chat tasks
@@ -153,7 +153,7 @@ type AgentTaskResponse struct {
 	AutopilotSource         string          `json:"autopilot_source,omitempty"`          // manual, schedule, webhook, or api
 	AutopilotTriggerPayload json.RawMessage `json:"autopilot_trigger_payload,omitempty"` // optional trigger payload for webhook/api runs
 	QuickCreatePrompt       string          `json:"quick_create_prompt,omitempty"`       // user's natural-language input for quick-create tasks
-	Kind                    string          `json:"kind"`                                // discriminator: "comment" | "autopilot" | "chat" | "quick_create" | "direct" — used by the activity row to label tasks that have no linked issue
+	Kind                    string          `json:"kind"`                                // discriminator: "comment" | "chat" | "quick_create" | "direct" — used by the activity row to label tasks that have no linked issue
 }
 
 // TaskAgentData holds agent info included in claim responses so the daemon
@@ -198,7 +198,7 @@ func taskToResponse(t db.TaskRun) AgentTaskResponse {
 		TriggerCommentID: uuidToPtr(t.TriggerCommentID),
 		TriggerSummary:   textToPtr(t.TriggerSummary),
 		// Surface task source so the UI can distinguish issue-linked tasks
-		// from chat-spawned or autopilot-spawned ones; all three may arrive
+		// from chat-spawned ones; both may arrive
 		// with issue_id = "" once a task has no linked issue.
 		ChatSessionID:  uuidToString(t.ChatSessionID),
 		AutopilotRunID: uuidToString(t.AutopilotRunID),
@@ -208,7 +208,7 @@ func taskToResponse(t db.TaskRun) AgentTaskResponse {
 
 // computeTaskKind picks the source-discriminator string the activity UI uses
 // to choose how to render a task row. Computed from the existing FK shape so
-// no extra DB lookup is needed: chat / autopilot / comment-on-issue (any
+// no extra DB lookup is needed: chat / comment-on-issue (any
 // triggered task with both an issue_id and trigger_comment_id) / quick_create
 // (no linked source — the agent is creating the issue itself) / direct
 // (assignee-driven task on an existing issue).
