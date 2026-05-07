@@ -835,48 +835,7 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		if issue, err := h.Queries.GetIssue(r.Context(), task.TaskID); err == nil {
 			resp.WorkspaceID = uuidToString(issue.WorkspaceID)
 
-			var projectRepos []RepoData
-			if issue.ProjectID.Valid {
-				resp.ProjectID = uuidToString(issue.ProjectID)
-				if proj, err := h.Queries.GetProject(r.Context(), issue.ProjectID); err == nil {
-					resp.ProjectTitle = proj.Title
-				}
-				if rows := h.listProjectResourcesForProject(r.Context(), issue.ProjectID); len(rows) > 0 {
-					out := make([]ProjectResourceData, 0, len(rows))
-					for _, row := range rows {
-						label := ""
-						if row.Label.Valid {
-							label = row.Label.String
-						}
-						ref := json.RawMessage(row.ResourceRef)
-						if len(ref) == 0 {
-							ref = json.RawMessage("{}")
-						}
-						out = append(out, ProjectResourceData{
-							ID:           uuidToString(row.ID),
-							ResourceType: row.ResourceType,
-							ResourceRef:  ref,
-							Label:        label,
-						})
-						// Lift github_repo resources into the daemon's repo list
-						// so `multica repo checkout` and the meta-skill render
-						// them as the issue's repos.
-						if row.ResourceType == "github_repo" {
-							var payload struct {
-								URL string `json:"url"`
-							}
-							if json.Unmarshal(row.ResourceRef, &payload) == nil && payload.URL != "" {
-								projectRepos = append(projectRepos, RepoData{URL: payload.URL})
-							}
-						}
-					}
-					resp.ProjectResources = out
-				}
-			}
-
-			if len(projectRepos) > 0 {
-				resp.Repos = projectRepos
-			} else if ws, err := h.Queries.GetWorkspace(r.Context(), issue.WorkspaceID); err == nil && ws.Repos != nil {
+				if ws, err := h.Queries.GetWorkspace(r.Context(), issue.WorkspaceID); err == nil && ws.Repos != nil {
 				var repos []RepoData
 				if json.Unmarshal(ws.Repos, &repos) == nil && len(repos) > 0 {
 					resp.Repos = repos

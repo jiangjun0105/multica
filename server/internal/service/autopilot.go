@@ -126,7 +126,6 @@ func (s *AutopilotService) dispatchCreateIssue(ctx context.Context, ap db.Autopi
 		Position:      0,
 		DueDate:       pgtype.Timestamptz{},
 		Number:        issueNumber,
-		ProjectID:     pgtype.UUID{},
 		OriginType:    pgtype.Text{String: "autopilot", Valid: true},
 		OriginID:      ap.ID,
 	})

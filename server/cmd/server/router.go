@@ -341,21 +341,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
-			// Projects
-			r.Route("/api/projects", func(r chi.Router) {
-				r.Get("/search", h.SearchProjects)
-				r.Get("/", h.ListProjects)
-				r.Post("/", h.CreateProject)
-				r.Route("/{id}", func(r chi.Router) {
-					r.Get("/", h.GetProject)
-					r.Put("/", h.UpdateProject)
-					r.Delete("/", h.DeleteProject)
-					r.Get("/resources", h.ListProjectResources)
-					r.Post("/resources", h.CreateProjectResource)
-					r.Delete("/resources/{resourceId}", h.DeleteProjectResource)
-				})
-			})
-
 			// Autopilots
 			r.Route("/api/autopilots", func(r chi.Router) {
 				r.Get("/", h.ListAutopilots)

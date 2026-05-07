@@ -39,7 +39,6 @@ type IssueResponse struct {
 	CreatorType        string                  `json:"creator_type"`
 	CreatorID          string                  `json:"creator_id"`
 	ParentIssueID      *string                 `json:"parent_issue_id"`
-	ProjectID          *string                 `json:"project_id"`
 	Position           float64                 `json:"position"`
 	DueDate            *string                 `json:"due_date"`
 	CreatedAt          string                  `json:"created_at"`
@@ -71,7 +70,6 @@ func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 		CreatorType:   i.CreatorType,
 		CreatorID:     uuidToString(i.CreatorID),
 		ParentIssueID: uuidToPtr(i.ParentIssueID),
-		ProjectID:     uuidToPtr(i.ProjectID),
 		Position:      i.Position,
 		DueDate:       timestampToPtr(i.DueDate),
 		CreatedAt:     timestampToString(i.CreatedAt),
@@ -96,7 +94,6 @@ func issueListRowToResponse(i db.ListIssuesRow, issuePrefix string) IssueRespons
 		CreatorType:   i.CreatorType,
 		CreatorID:     uuidToString(i.CreatorID),
 		ParentIssueID: uuidToPtr(i.ParentIssueID),
-		ProjectID:     uuidToPtr(i.ProjectID),
 		Position:      i.Position,
 		DueDate:       timestampToPtr(i.DueDate),
 		CreatedAt:     timestampToString(i.CreatedAt),
@@ -151,7 +148,6 @@ func openIssueRowToResponse(i db.ListOpenIssuesRow, issuePrefix string) IssueRes
 		CreatorType:   i.CreatorType,
 		CreatorID:     uuidToString(i.CreatorID),
 		ParentIssueID: uuidToPtr(i.ParentIssueID),
-		ProjectID:     uuidToPtr(i.ProjectID),
 		Position:      i.Position,
 		DueDate:       timestampToPtr(i.DueDate),
 		CreatedAt:     timestampToString(i.CreatedAt),
@@ -465,7 +461,7 @@ func buildSearchQuery(phrase string, terms []string, queryNum int, hasNum bool, 
 	query := fmt.Sprintf(`SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority,
 		i.assignee_type, i.assignee_id, i.creator_type, i.creator_id,
 		i.parent_issue_id, i.acceptance_criteria, i.context_refs, i.position,
-		i.due_date, i.created_at, i.updated_at, i.number, i.project_id,
+		i.due_date, i.created_at, i.updated_at, i.number,
 		COUNT(*) OVER() AS total_count,
 		%s AS match_source,
 		%s AS matched_comment_content
@@ -557,7 +553,6 @@ func (h *Handler) SearchIssues(w http.ResponseWriter, r *http.Request) {
 			&sr.issue.CreatedAt,
 			&sr.issue.UpdatedAt,
 			&sr.issue.Number,
-			&sr.issue.ProjectID,
 			&sr.totalCount,
 			&sr.matchSource,
 			&sr.matchedCommentContent,
@@ -644,15 +639,6 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		}
 		creatorFilter = id
 	}
-	var projectFilter pgtype.UUID
-	if p := r.URL.Query().Get("project_id"); p != "" {
-		id, ok := parseUUIDOrBadRequest(w, p, "project_id")
-		if !ok {
-			return
-		}
-		projectFilter = id
-	}
-
 	// open_only=true returns all non-done/cancelled issues (no limit).
 	if r.URL.Query().Get("open_only") == "true" {
 		issues, err := h.Queries.ListOpenIssues(ctx, db.ListOpenIssuesParams{
@@ -661,7 +647,6 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 			AssigneeID:  assigneeFilter,
 			AssigneeIds: assigneeIdsFilter,
 			CreatorID:   creatorFilter,
-			ProjectID:   projectFilter,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -718,7 +703,6 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		AssigneeID:  assigneeFilter,
 		AssigneeIds: assigneeIdsFilter,
 		CreatorID:   creatorFilter,
-		ProjectID:   projectFilter,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -733,7 +717,6 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		AssigneeID:  assigneeFilter,
 		AssigneeIds: assigneeIdsFilter,
 		CreatorID:   creatorFilter,
-		ProjectID:   projectFilter,
 	})
 	if err != nil {
 		total = int64(len(issues))
@@ -1049,7 +1032,6 @@ type CreateIssueRequest struct {
 	AssigneeType       *string  `json:"assignee_type"`
 	AssigneeID         *string  `json:"assignee_id"`
 	ParentIssueID      *string  `json:"parent_issue_id"`
-	ProjectID          *string  `json:"project_id"`
 	DueDate            *string  `json:"due_date"`
 	AttachmentIDs      []string `json:"attachment_ids,omitempty"`
 	// OriginType / OriginID stamp the new issue with its provenance so
@@ -1113,21 +1095,12 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var parentIssueID pgtype.UUID
-	var projectID pgtype.UUID
-	if req.ProjectID != nil {
-		id, ok := parseUUIDOrBadRequest(w, *req.ProjectID, "project_id")
-		if !ok {
-			return
-		}
-		projectID = id
-	}
 	if req.ParentIssueID != nil {
 		id, ok := parseUUIDOrBadRequest(w, *req.ParentIssueID, "parent_issue_id")
 		if !ok {
 			return
 		}
 		parentIssueID = id
-		// Validate parent exists in the same workspace.
 		parent, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
 			ID:          parentIssueID,
 			WorkspaceID: wsUUID,
@@ -1135,9 +1108,6 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		if err != nil || !parent.ID.Valid {
 			writeError(w, http.StatusBadRequest, "parent issue not found in this workspace")
 			return
-		}
-		if req.ProjectID == nil {
-			projectID = parent.ProjectID
 		}
 	}
 
@@ -1218,7 +1188,6 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 			Position:      0,
 			DueDate:       dueDate,
 			Number:        issueNumber,
-			ProjectID:     projectID,
 			OriginType:    originType,
 			OriginID:      originID,
 		})
@@ -1237,7 +1206,6 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 			Position:      0,
 			DueDate:       dueDate,
 			Number:        issueNumber,
-			ProjectID:     projectID,
 		})
 	}
 	if err != nil {
@@ -1296,7 +1264,6 @@ type UpdateIssueRequest struct {
 	Position           *float64 `json:"position"`
 	DueDate            *string  `json:"due_date"`
 	ParentIssueID      *string  `json:"parent_issue_id"`
-	ProjectID          *string  `json:"project_id"`
 }
 
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
@@ -1332,7 +1299,6 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		AssigneeID:    prevIssue.AssigneeID,
 		DueDate:       prevIssue.DueDate,
 		ParentIssueID: prevIssue.ParentIssueID,
-		ProjectID:     prevIssue.ProjectID,
 	}
 
 	// COALESCE fields — only set when explicitly provided
@@ -1421,18 +1387,6 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 			params.ParentIssueID = pgtype.UUID{Valid: false} // explicit null = remove parent
 		}
 	}
-	if _, ok := rawFields["project_id"]; ok {
-		if req.ProjectID != nil {
-			projectUUID, ok := parseUUIDOrBadRequest(w, *req.ProjectID, "project_id")
-			if !ok {
-				return
-			}
-			params.ProjectID = projectUUID
-		} else {
-			params.ProjectID = pgtype.UUID{Valid: false}
-		}
-	}
-
 	// Validate the resulting (assignee_type, assignee_id) pair when the caller
 	// touches either field. Existing data on the issue is left alone if the
 	// caller is not changing it.
@@ -1707,7 +1661,7 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 		req.Updates.Priority != nil ||
 		req.Updates.Position != nil
 	if !hasMutation {
-		for _, k := range []string{"assignee_type", "assignee_id", "due_date", "parent_issue_id", "project_id"} {
+		for _, k := range []string{"assignee_type", "assignee_id", "due_date", "parent_issue_id"} {
 			if _, ok := rawUpdates[k]; ok {
 				hasMutation = true
 				break
@@ -1744,7 +1698,6 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 			AssigneeID:    prevIssue.AssigneeID,
 			DueDate:       prevIssue.DueDate,
 			ParentIssueID: prevIssue.ParentIssueID,
-			ProjectID:     prevIssue.ProjectID,
 		}
 
 		if req.Updates.Title != nil {
@@ -1831,18 +1784,6 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 				params.ParentIssueID = pgtype.UUID{Valid: false}
 			}
 		}
-		if _, ok := rawUpdates["project_id"]; ok {
-			if req.Updates.ProjectID != nil {
-				projectUUID, err := util.ParseUUID(*req.Updates.ProjectID)
-				if err != nil {
-					continue
-				}
-				params.ProjectID = projectUUID
-			} else {
-				params.ProjectID = pgtype.UUID{Valid: false}
-			}
-		}
-
 		// Validate the resulting assignee pair when this batch update touches
 		// either assignee field. Skip the issue silently on failure.
 		_, batchTouchedType := rawUpdates["assignee_type"]

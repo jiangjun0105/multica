@@ -111,13 +111,6 @@ func (h *Handler) CreatePin(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "issue not found")
 			return
 		}
-	case "project":
-		if _, err := h.Queries.GetProjectInWorkspace(r.Context(), db.GetProjectInWorkspaceParams{
-			ID: itemUUID, WorkspaceID: wsUUID,
-		}); err != nil {
-			writeError(w, http.StatusNotFound, "project not found")
-			return
-		}
 	}
 
 	// Get max position to append at end

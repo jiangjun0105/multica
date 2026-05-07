@@ -242,7 +242,6 @@ type Issue struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	Number             int32              `json:"number"`
-	ProjectID          pgtype.UUID        `json:"project_id"`
 	OriginType         pgtype.Text        `json:"origin_type"`
 	OriginID           pgtype.UUID        `json:"origin_id"`
 	FirstExecutedAt    pgtype.Timestamptz `json:"first_executed_at"`
@@ -323,32 +322,6 @@ type PinnedItem struct {
 	ItemID      pgtype.UUID        `json:"item_id"`
 	Position    float64            `json:"position"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-}
-
-type Project struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	Title       string             `json:"title"`
-	Description pgtype.Text        `json:"description"`
-	Icon        pgtype.Text        `json:"icon"`
-	Status      string             `json:"status"`
-	LeadType    pgtype.Text        `json:"lead_type"`
-	LeadID      pgtype.UUID        `json:"lead_id"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	Priority    string             `json:"priority"`
-}
-
-type ProjectResource struct {
-	ID           pgtype.UUID        `json:"id"`
-	ProjectID    pgtype.UUID        `json:"project_id"`
-	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
-	ResourceType string             `json:"resource_type"`
-	ResourceRef  []byte             `json:"resource_ref"`
-	Label        pgtype.Text        `json:"label"`
-	Position     int32              `json:"position"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	CreatedBy    pgtype.UUID        `json:"created_by"`
 }
 
 type Skill struct {
