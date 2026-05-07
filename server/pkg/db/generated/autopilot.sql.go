@@ -202,9 +202,9 @@ func (q *Queries) CreateAutopilotRun(ctx context.Context, arg CreateAutopilotRun
 
 const createAutopilotTask = `-- name: CreateAutopilotTask :one
 
-INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, autopilot_run_id, trigger_summary)
+INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, autopilot_run_id, trigger_summary)
 VALUES ($1, $2, NULL, 'queued', $3, $4, $5)
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, chat_session_id, autopilot_run_id, attempt, max_attempts, parent_task_id, failure_reason, last_heartbeat_at, trigger_summary, force_fresh_session
+RETURNING id, agent_id, task_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, chat_session_id, autopilot_run_id, attempt, max_attempts, parent_task_id, failure_reason, last_heartbeat_at, trigger_summary, force_fresh_session
 `
 
 type CreateAutopilotTaskParams struct {
@@ -218,7 +218,7 @@ type CreateAutopilotTaskParams struct {
 // =====================
 // Task Queue (run_only mode)
 // =====================
-func (q *Queries) CreateAutopilotTask(ctx context.Context, arg CreateAutopilotTaskParams) (AgentTaskQueue, error) {
+func (q *Queries) CreateAutopilotTask(ctx context.Context, arg CreateAutopilotTaskParams) (TaskRun, error) {
 	row := q.db.QueryRow(ctx, createAutopilotTask,
 		arg.AgentID,
 		arg.RuntimeID,
@@ -226,11 +226,11 @@ func (q *Queries) CreateAutopilotTask(ctx context.Context, arg CreateAutopilotTa
 		arg.AutopilotRunID,
 		arg.TriggerSummary,
 	)
-	var i AgentTaskQueue
+	var i TaskRun
 	err := row.Scan(
 		&i.ID,
 		&i.AgentID,
-		&i.IssueID,
+		&i.TaskID,
 		&i.Status,
 		&i.Priority,
 		&i.DispatchedAt,

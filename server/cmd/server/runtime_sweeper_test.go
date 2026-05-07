@@ -46,13 +46,13 @@ func setupSweeperTestFixture(t *testing.T, taskStatus string) (string, string, s
 	switch taskStatus {
 	case "running":
 		err = testPool.QueryRow(ctx, `
-			INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, dispatched_at, started_at)
+			INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, dispatched_at, started_at)
 			VALUES ($1, $2, $3, 'running', 0, now() - interval '3 hours', now() - interval '3 hours')
 			RETURNING id
 		`, agentID, runtimeID, issueID).Scan(&taskID)
 	case "dispatched":
 		err = testPool.QueryRow(ctx, `
-			INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, dispatched_at)
+			INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, dispatched_at)
 			VALUES ($1, $2, $3, 'dispatched', 0, now() - interval '10 minutes')
 			RETURNING id
 		`, agentID, runtimeID, issueID).Scan(&taskID)
@@ -73,7 +73,7 @@ func setupSweeperTestFixture(t *testing.T, taskStatus string) (string, string, s
 func cleanupSweeperFixture(t *testing.T, issueID, agentID string) {
 	t.Helper()
 	ctx := context.Background()
-	testPool.Exec(ctx, `DELETE FROM agent_task_queue WHERE issue_id = $1`, issueID)
+	testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1`, issueID)
 	testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
 	testPool.Exec(ctx, `UPDATE agent SET status = 'idle' WHERE id = $1`, agentID)
 }
@@ -102,7 +102,7 @@ func TestRefreshAgentStatusFromTasks(t *testing.T) {
 	}
 
 	if _, err := testPool.Exec(ctx, `
-		UPDATE agent_task_queue
+		UPDATE task_run
 		SET status = 'cancelled', completed_at = now()
 		WHERE id = $1
 	`, taskID); err != nil {
@@ -195,7 +195,7 @@ func TestSweepStaleTasksBroadcastsWithWorkspaceID(t *testing.T) {
 
 	// Verify DB: task should be failed
 	var status string
-	err = testPool.QueryRow(context.Background(), `SELECT status FROM agent_task_queue WHERE id = $1`, taskID).Scan(&status)
+	err = testPool.QueryRow(context.Background(), `SELECT status FROM task_run WHERE id = $1`, taskID).Scan(&status)
 	if err != nil {
 		t.Fatalf("failed to query task status: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestSweepDispatchedStaleTask(t *testing.T) {
 
 	// Verify DB: task should be failed
 	var status string
-	err = testPool.QueryRow(context.Background(), `SELECT status FROM agent_task_queue WHERE id = $1`, taskID).Scan(&status)
+	err = testPool.QueryRow(context.Background(), `SELECT status FROM task_run WHERE id = $1`, taskID).Scan(&status)
 	if err != nil {
 		t.Fatalf("failed to query task: %v", err)
 	}
@@ -381,14 +381,14 @@ func TestSweepResetsInProgressIssueToTodo(t *testing.T) {
 		t.Fatalf("failed to create test issue: %v", err)
 	}
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM agent_task_queue WHERE issue_id = $1`, issueID)
+		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1`, issueID)
 		testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
 	})
 
 	// Create a stale running task for the issue (3 hours old — beyond any timeout).
 	var taskID string
 	err = testPool.QueryRow(ctx, `
-		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, dispatched_at, started_at)
+		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, dispatched_at, started_at)
 		VALUES ($1, $2, $3, 'running', 0, now() - interval '3 hours', now() - interval '3 hours')
 		RETURNING id
 	`, agentID, runtimeID, issueID).Scan(&taskID)
@@ -467,13 +467,13 @@ func TestSweepDoesNotResetIssueAlreadyInReview(t *testing.T) {
 		t.Fatalf("failed to create test issue: %v", err)
 	}
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM agent_task_queue WHERE issue_id = $1`, issueID)
+		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1`, issueID)
 		testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
 	})
 
 	var taskID string
 	err = testPool.QueryRow(ctx, `
-		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, dispatched_at, started_at)
+		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, dispatched_at, started_at)
 		VALUES ($1, $2, $3, 'running', 0, now() - interval '3 hours', now() - interval '3 hours')
 		RETURNING id
 	`, agentID, runtimeID, issueID).Scan(&taskID)

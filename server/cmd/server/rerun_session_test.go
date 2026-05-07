@@ -45,7 +45,7 @@ func setupRerunTestFixture(t *testing.T) (string, string, string) {
 func cleanupRerunFixture(t *testing.T, issueID string) {
 	t.Helper()
 	ctx := context.Background()
-	testPool.Exec(ctx, `DELETE FROM agent_task_queue WHERE issue_id = $1`, issueID)
+	testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1`, issueID)
 	testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
 }
 
@@ -68,14 +68,14 @@ func TestGetLastTaskSessionExcludesPoisonedFailures(t *testing.T) {
 	// The poisoned task is the *most recent* one, so without the filter the
 	// resume lookup would return its session_id.
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, started_at, completed_at, session_id, work_dir, failure_reason)
+		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, started_at, completed_at, session_id, work_dir, failure_reason)
 		VALUES ($1, $2, $3, 'failed', 0, now() - interval '2 minutes', now() - interval '2 minutes', 'HEALTHY-SESSION', '/tmp/healthy', 'timeout')
 	`, agentID, runtimeID, issueID); err != nil {
 		t.Fatalf("insert healthy failed task: %v", err)
 	}
 
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, started_at, completed_at, session_id, work_dir, failure_reason)
+		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, started_at, completed_at, session_id, work_dir, failure_reason)
 		VALUES ($1, $2, $3, 'failed', 0, now() - interval '1 minute', now() - interval '1 minute', 'POISONED-SESSION', '/tmp/poisoned', 'iteration_limit')
 	`, agentID, runtimeID, issueID); err != nil {
 		t.Fatalf("insert poisoned failed task: %v", err)
@@ -113,7 +113,7 @@ func TestGetLastTaskSessionFallbackPoisonedClassifier(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, started_at, completed_at, session_id, work_dir, failure_reason)
+		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, started_at, completed_at, session_id, work_dir, failure_reason)
 		VALUES ($1, $2, $3, 'failed', 0, now() - interval '5 seconds', now() - interval '5 seconds', 'POISONED-FALLBACK', '/tmp/poisoned', 'agent_fallback_message')
 	`, agentID, runtimeID, issueID); err != nil {
 		t.Fatalf("insert poisoned failed task: %v", err)

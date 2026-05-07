@@ -103,7 +103,7 @@ ORDER BY position ASC, created_at DESC;
 -- name: GetIssueByOrigin :one
 -- Finds the issue stamped with a specific (origin_type, origin_id) pair.
 -- Used by quick-create completion to deterministically locate the issue
--- produced by a given agent_task_queue.id — robust against concurrent
+-- produced by a given task_run.id — robust against concurrent
 -- issue creates by the same agent (assignment task + quick-create both
 -- running with max_concurrent_tasks > 1).
 SELECT * FROM issue

@@ -98,9 +98,9 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 }
 
 const createChatTask = `-- name: CreateChatTask :one
-INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, chat_session_id)
+INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, chat_session_id)
 VALUES ($1, $2, NULL, 'queued', $3, $4)
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, chat_session_id, autopilot_run_id, attempt, max_attempts, parent_task_id, failure_reason, last_heartbeat_at, trigger_summary, force_fresh_session
+RETURNING id, agent_id, task_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, chat_session_id, autopilot_run_id, attempt, max_attempts, parent_task_id, failure_reason, last_heartbeat_at, trigger_summary, force_fresh_session
 `
 
 type CreateChatTaskParams struct {
@@ -110,18 +110,18 @@ type CreateChatTaskParams struct {
 	ChatSessionID pgtype.UUID `json:"chat_session_id"`
 }
 
-func (q *Queries) CreateChatTask(ctx context.Context, arg CreateChatTaskParams) (AgentTaskQueue, error) {
+func (q *Queries) CreateChatTask(ctx context.Context, arg CreateChatTaskParams) (TaskRun, error) {
 	row := q.db.QueryRow(ctx, createChatTask,
 		arg.AgentID,
 		arg.RuntimeID,
 		arg.Priority,
 		arg.ChatSessionID,
 	)
-	var i AgentTaskQueue
+	var i TaskRun
 	err := row.Scan(
 		&i.ID,
 		&i.AgentID,
-		&i.IssueID,
+		&i.TaskID,
 		&i.Status,
 		&i.Priority,
 		&i.DispatchedAt,
@@ -225,7 +225,7 @@ func (q *Queries) GetChatSessionInWorkspace(ctx context.Context, arg GetChatSess
 }
 
 const getLastChatTaskSession = `-- name: GetLastChatTaskSession :one
-SELECT session_id, work_dir, runtime_id FROM agent_task_queue
+SELECT session_id, work_dir, runtime_id FROM task_run
 WHERE chat_session_id = $1
   AND status IN ('completed', 'failed')
   AND session_id IS NOT NULL
@@ -252,7 +252,7 @@ func (q *Queries) GetLastChatTaskSession(ctx context.Context, chatSessionID pgty
 }
 
 const getPendingChatTask = `-- name: GetPendingChatTask :one
-SELECT id, status, created_at FROM agent_task_queue
+SELECT id, status, created_at FROM task_run
 WHERE chat_session_id = $1 AND status IN ('queued', 'dispatched', 'running')
 ORDER BY created_at DESC
 LIMIT 1
@@ -442,7 +442,7 @@ func (q *Queries) ListChatSessionsByCreator(ctx context.Context, arg ListChatSes
 
 const listPendingChatTasksByCreator = `-- name: ListPendingChatTasksByCreator :many
 SELECT atq.id AS task_id, atq.status, atq.chat_session_id
-FROM agent_task_queue atq
+FROM task_run atq
 JOIN chat_session cs ON cs.id = atq.chat_session_id
 WHERE cs.workspace_id = $1
   AND cs.creator_id = $2

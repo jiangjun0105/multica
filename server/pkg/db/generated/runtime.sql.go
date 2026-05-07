@@ -77,31 +77,31 @@ func (q *Queries) DeleteStaleOfflineRuntimes(ctx context.Context, staleSeconds f
 }
 
 const failTasksForOfflineRuntimes = `-- name: FailTasksForOfflineRuntimes :many
-UPDATE agent_task_queue
+UPDATE task_run
 SET status = 'failed', completed_at = now(), error = 'runtime went offline',
     failure_reason = 'runtime_offline'
 WHERE status IN ('dispatched', 'running')
   AND runtime_id IN (
     SELECT id FROM agent_runtime WHERE status = 'offline'
   )
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, chat_session_id, autopilot_run_id, attempt, max_attempts, parent_task_id, failure_reason, last_heartbeat_at, trigger_summary, force_fresh_session
+RETURNING id, agent_id, task_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, chat_session_id, autopilot_run_id, attempt, max_attempts, parent_task_id, failure_reason, last_heartbeat_at, trigger_summary, force_fresh_session
 `
 
 // Marks dispatched/running tasks as failed when their runtime is offline.
 // This cleans up orphaned tasks after a daemon crash or network partition.
-func (q *Queries) FailTasksForOfflineRuntimes(ctx context.Context) ([]AgentTaskQueue, error) {
+func (q *Queries) FailTasksForOfflineRuntimes(ctx context.Context) ([]TaskRun, error) {
 	rows, err := q.db.Query(ctx, failTasksForOfflineRuntimes)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []AgentTaskQueue{}
+	items := []TaskRun{}
 	for rows.Next() {
-		var i AgentTaskQueue
+		var i TaskRun
 		if err := rows.Scan(
 			&i.ID,
 			&i.AgentID,
-			&i.IssueID,
+			&i.TaskID,
 			&i.Status,
 			&i.Priority,
 			&i.DispatchedAt,
@@ -398,7 +398,7 @@ func (q *Queries) ReassignAgentsToRuntime(ctx context.Context, arg ReassignAgent
 }
 
 const reassignTasksToRuntime = `-- name: ReassignTasksToRuntime :execrows
-UPDATE agent_task_queue
+UPDATE task_run
 SET runtime_id = $1
 WHERE runtime_id = $2
 `
@@ -409,7 +409,7 @@ type ReassignTasksToRuntimeParams struct {
 }
 
 // Re-points every queued/running/completed task referencing old_runtime_id.
-// Required before deleting the old runtime row because agent_task_queue has
+// Required before deleting the old runtime row because task_run has
 // an ON DELETE CASCADE FK that would otherwise drop historical tasks.
 func (q *Queries) ReassignTasksToRuntime(ctx context.Context, arg ReassignTasksToRuntimeParams) (int64, error) {
 	result, err := q.db.Exec(ctx, reassignTasksToRuntime, arg.NewRuntimeID, arg.OldRuntimeID)

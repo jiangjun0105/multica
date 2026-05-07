@@ -64,10 +64,10 @@ func TestListWorkspaceAgentTaskSnapshot(t *testing.T) {
 		var id string
 		var query string
 		if f.completedAt == "" {
-			query = `INSERT INTO agent_task_queue (agent_id, runtime_id, status, priority)
+			query = `INSERT INTO task_run (agent_id, runtime_id, status, priority)
 			         VALUES ($1, $2, $3, 0) RETURNING id`
 		} else {
-			query = `INSERT INTO agent_task_queue (agent_id, runtime_id, status, priority, completed_at)
+			query = `INSERT INTO task_run (agent_id, runtime_id, status, priority, completed_at)
 			         VALUES ($1, $2, $3, 0, ` + f.completedAt + `) RETURNING id`
 		}
 		if err := testPool.QueryRow(ctx, query, f.agentID, testRuntimeID, f.status).Scan(&id); err != nil {
@@ -77,7 +77,7 @@ func TestListWorkspaceAgentTaskSnapshot(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for _, id := range insertedIDs {
-			testPool.Exec(ctx, `DELETE FROM agent_task_queue WHERE id = $1`, id)
+			testPool.Exec(ctx, `DELETE FROM task_run WHERE id = $1`, id)
 		}
 	})
 

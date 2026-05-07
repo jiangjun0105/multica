@@ -19,8 +19,8 @@ SELECT
     COALESCE(SUM(tu.cache_write_tokens), 0)::bigint AS total_cache_write_tokens,
     COUNT(DISTINCT tu.task_id)::int AS task_count
 FROM task_usage tu
-JOIN agent_task_queue atq ON atq.id = tu.task_id
-WHERE atq.issue_id = $1
+JOIN task_run atq ON atq.id = tu.task_id
+WHERE atq.task_id = $1
 `
 
 type GetIssueUsageSummaryRow struct {
@@ -90,7 +90,7 @@ SELECT
     SUM(tu.cache_write_tokens)::bigint AS total_cache_write_tokens,
     COUNT(DISTINCT tu.task_id)::int AS task_count
 FROM task_usage tu
-JOIN agent_task_queue atq ON atq.id = tu.task_id
+JOIN task_run atq ON atq.id = tu.task_id
 JOIN agent a ON a.id = atq.agent_id
 WHERE a.workspace_id = $1
   AND tu.created_at >= DATE_TRUNC('day', $2::timestamptz)
@@ -154,7 +154,7 @@ SELECT
     SUM(tu.cache_write_tokens)::bigint AS total_cache_write_tokens,
     COUNT(DISTINCT tu.task_id)::int AS task_count
 FROM task_usage tu
-JOIN agent_task_queue atq ON atq.id = tu.task_id
+JOIN task_run atq ON atq.id = tu.task_id
 JOIN agent a ON a.id = atq.agent_id
 WHERE a.workspace_id = $1
   AND tu.created_at >= DATE_TRUNC('day', $2::timestamptz)

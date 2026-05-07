@@ -13,7 +13,7 @@ import (
 
 const getRuntimeTaskHourlyActivity = `-- name: GetRuntimeTaskHourlyActivity :many
 SELECT EXTRACT(HOUR FROM started_at)::int AS hour, COUNT(*)::int AS count
-FROM agent_task_queue
+FROM task_run
 WHERE runtime_id = $1 AND started_at IS NOT NULL
 GROUP BY hour
 ORDER BY hour
@@ -54,7 +54,7 @@ SELECT
     SUM(tu.cache_write_tokens)::bigint AS cache_write_tokens,
     COUNT(DISTINCT tu.task_id)::int AS task_count
 FROM task_usage tu
-JOIN agent_task_queue atq ON atq.id = tu.task_id
+JOIN task_run atq ON atq.id = tu.task_id
 WHERE atq.runtime_id = $1
   AND tu.created_at >= DATE_TRUNC('day', $2::timestamptz)
 GROUP BY EXTRACT(HOUR FROM tu.created_at), tu.model
@@ -119,7 +119,7 @@ SELECT
     SUM(tu.cache_read_tokens)::bigint AS cache_read_tokens,
     SUM(tu.cache_write_tokens)::bigint AS cache_write_tokens
 FROM task_usage tu
-JOIN agent_task_queue atq ON atq.id = tu.task_id
+JOIN task_run atq ON atq.id = tu.task_id
 WHERE atq.runtime_id = $1
   AND tu.created_at >= DATE_TRUNC('day', $2::timestamptz)
 GROUP BY DATE(tu.created_at), tu.provider, tu.model
@@ -183,7 +183,7 @@ SELECT
     SUM(tu.cache_write_tokens)::bigint AS cache_write_tokens,
     COUNT(DISTINCT tu.task_id)::int AS task_count
 FROM task_usage tu
-JOIN agent_task_queue atq ON atq.id = tu.task_id
+JOIN task_run atq ON atq.id = tu.task_id
 WHERE atq.runtime_id = $1
   AND tu.created_at >= DATE_TRUNC('day', $2::timestamptz)
 GROUP BY atq.agent_id, tu.model

@@ -69,7 +69,7 @@ SELECT * FROM chat_message
 WHERE id = $1;
 
 -- name: CreateChatTask :one
-INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, chat_session_id)
+INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, chat_session_id)
 VALUES ($1, $2, NULL, 'queued', $3, $4)
 RETURNING *;
 
@@ -79,7 +79,7 @@ RETURNING *;
 -- may have established a real agent session before failing, and we'd rather
 -- resume there than start over and lose conversation memory. Used as a
 -- fallback when chat_session.session_id is NULL.
-SELECT session_id, work_dir, runtime_id FROM agent_task_queue
+SELECT session_id, work_dir, runtime_id FROM task_run
 WHERE chat_session_id = $1
   AND status IN ('completed', 'failed')
   AND session_id IS NOT NULL
@@ -92,7 +92,7 @@ LIMIT 1;
 -- created_at is the anchor for the chat StatusPill timer (it computes
 -- elapsed = now - task.created_at), so the pill survives refresh / reopen
 -- without "resetting to 0s".
-SELECT id, status, created_at FROM agent_task_queue
+SELECT id, status, created_at FROM task_run
 WHERE chat_session_id = $1 AND status IN ('queued', 'dispatched', 'running')
 ORDER BY created_at DESC
 LIMIT 1;
@@ -102,7 +102,7 @@ LIMIT 1;
 -- workspace. Drives the FAB's "running" indicator when the chat window is
 -- closed and no single session's query is active.
 SELECT atq.id AS task_id, atq.status, atq.chat_session_id
-FROM agent_task_queue atq
+FROM task_run atq
 JOIN chat_session cs ON cs.id = atq.chat_session_id
 WHERE cs.workspace_id = $1
   AND cs.creator_id = $2

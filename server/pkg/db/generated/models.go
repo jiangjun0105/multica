@@ -66,10 +66,10 @@ type AgentSkill struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-type AgentTaskQueue struct {
+type TaskRun struct {
 	ID                pgtype.UUID        `json:"id"`
 	AgentID           pgtype.UUID        `json:"agent_id"`
-	IssueID           pgtype.UUID        `json:"issue_id"`
+	TaskID            pgtype.UUID        `json:"task_id"`
 	Status            string             `json:"status"`
 	Priority          int32              `json:"priority"`
 	DispatchedAt      pgtype.Timestamptz `json:"dispatched_at"`

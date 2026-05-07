@@ -266,7 +266,7 @@ func (s *AutopilotService) SyncRunFromIssue(ctx context.Context, issue db.Issue)
 }
 
 // SyncRunFromTask updates the autopilot run when a run_only task completes or fails.
-func (s *AutopilotService) SyncRunFromTask(ctx context.Context, task db.AgentTaskQueue) {
+func (s *AutopilotService) SyncRunFromTask(ctx context.Context, task db.TaskRun) {
 	if !task.AutopilotRunID.Valid {
 		return
 	}
