@@ -527,14 +527,14 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	authPath := middleware.DaemonAuthPathFromContext(r.Context())
 	var (
-		outcome                                                                                            = "unauth"
-		runtimeID                                                                                          string
-		decodeMs, runtimeLookupMs, workspaceCheckMs                                                        int64
-		authMs, updateMs, probeModelMs, popModelMs, probeSkillsMs, popSkillsMs, probeImportMs, popImportMs int64
-		probeModelTimedOut, probeSkillsTimedOut, probeImportTimedOut                                       bool
+		outcome                                     = "unauth"
+		runtimeID                                    string
+		decodeMs, runtimeLookupMs, workspaceCheckMs int64
+		authMs, updateMs, probeModelMs, popModelMs  int64
+		probeModelTimedOut                          bool
 	)
 	defer func() {
-		logHeartbeatEndpointSlow(runtimeID, outcome, authPath, start, decodeMs, runtimeLookupMs, workspaceCheckMs, authMs, updateMs, probeModelMs, popModelMs, probeSkillsMs, popSkillsMs, probeImportMs, popImportMs, probeModelTimedOut, probeSkillsTimedOut, probeImportTimedOut)
+		logHeartbeatEndpointSlow(runtimeID, outcome, authPath, start, decodeMs, runtimeLookupMs, workspaceCheckMs, authMs, updateMs, probeModelMs, popModelMs, probeModelTimedOut)
 	}()
 
 	decodeStart := time.Now()
@@ -586,13 +586,7 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	updateMs = m.UpdateMs
 	probeModelMs = m.ProbeModelMs
 	popModelMs = m.PopModelMs
-	probeSkillsMs = m.ProbeSkillsMs
-	popSkillsMs = m.PopSkillsMs
-	probeImportMs = m.ProbeImportMs
-	popImportMs = m.PopImportMs
 	probeModelTimedOut = m.ProbeModelTimedOut
-	probeSkillsTimedOut = m.ProbeSkillsTimedOut
-	probeImportTimedOut = m.ProbeImportTimedOut
 	if err != nil {
 		outcome = "error_update"
 		writeError(w, http.StatusInternalServerError, "heartbeat failed")
@@ -609,12 +603,6 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	if ack.PendingModelList != nil {
 		resp["pending_model_list"] = ack.PendingModelList
-	}
-	if ack.PendingLocalSkills != nil {
-		resp["pending_local_skills"] = ack.PendingLocalSkills
-	}
-	if ack.PendingLocalSkillImport != nil {
-		resp["pending_local_skill_import"] = ack.PendingLocalSkillImport
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -645,8 +633,8 @@ func (h *Handler) HandleDaemonWSHeartbeat(ctx context.Context, identity daemonws
 // heartbeatMetrics carries per-stage timings out of processHeartbeat so the
 // HTTP slow-log can stay structured. The WS path discards them.
 type heartbeatMetrics struct {
-	UpdateMs, ProbeModelMs, PopModelMs, ProbeSkillsMs, PopSkillsMs, ProbeImportMs, PopImportMs int64
-	ProbeModelTimedOut, ProbeSkillsTimedOut, ProbeImportTimedOut                               bool
+	UpdateMs, ProbeModelMs, PopModelMs int64
+	ProbeModelTimedOut                 bool
 }
 
 // processHeartbeat does the work shared by HTTP POST /api/daemon/heartbeat and
@@ -706,61 +694,6 @@ func (h *Handler) processHeartbeat(ctx context.Context, rt db.AgentRuntime) (*pr
 		}
 	}
 
-	// Probe then claim the local-skill list queue. The probe is bounded so a
-	// slow shared store cannot stall the heartbeat on empty-queue ticks; the
-	// claim runs unbounded (it inherits only ctx) because its Lua side
-	// effects cannot be safely aborted mid-script.
-	probeSkillsStart := time.Now()
-	probeSkillsCtx, cancelProbeSkills := context.WithTimeout(ctx, heartbeatHasPendingTimeout)
-	hasSkills, probeErr := h.LocalSkillListStore.HasPending(probeSkillsCtx, runtimeID)
-	cancelProbeSkills()
-	m.ProbeSkillsMs = time.Since(probeSkillsStart).Milliseconds()
-	switch {
-	case probeErr == nil && hasSkills:
-		popStart := time.Now()
-		pendingSkills, popErr := h.LocalSkillListStore.PopPending(ctx, runtimeID)
-		m.PopSkillsMs = time.Since(popStart).Milliseconds()
-		if popErr != nil {
-			slog.Warn("local skill list PopPending failed", "error", popErr, "runtime_id", runtimeID)
-		} else if pendingSkills != nil {
-			ack.PendingLocalSkills = &protocol.DaemonHeartbeatPendingLocalSkills{ID: pendingSkills.ID}
-		}
-	case probeErr != nil:
-		if errors.Is(probeErr, context.DeadlineExceeded) || errors.Is(probeErr, context.Canceled) {
-			m.ProbeSkillsTimedOut = true
-			slog.Warn("local skill list HasPending timed out", "runtime_id", runtimeID, "elapsed_ms", m.ProbeSkillsMs)
-		} else {
-			slog.Warn("local skill list HasPending failed", "error", probeErr, "runtime_id", runtimeID)
-		}
-	}
-
-	probeImportStart := time.Now()
-	probeImportCtx, cancelProbeImport := context.WithTimeout(ctx, heartbeatHasPendingTimeout)
-	hasImport, probeErr := h.LocalSkillImportStore.HasPending(probeImportCtx, runtimeID)
-	cancelProbeImport()
-	m.ProbeImportMs = time.Since(probeImportStart).Milliseconds()
-	switch {
-	case probeErr == nil && hasImport:
-		popStart := time.Now()
-		pendingImport, popErr := h.LocalSkillImportStore.PopPending(ctx, runtimeID)
-		m.PopImportMs = time.Since(popStart).Milliseconds()
-		if popErr != nil {
-			slog.Warn("local skill import PopPending failed", "error", popErr, "runtime_id", runtimeID)
-		} else if pendingImport != nil {
-			ack.PendingLocalSkillImport = &protocol.DaemonHeartbeatPendingLocalSkillImport{
-				ID:       pendingImport.ID,
-				SkillKey: pendingImport.SkillKey,
-			}
-		}
-	case probeErr != nil:
-		if errors.Is(probeErr, context.DeadlineExceeded) || errors.Is(probeErr, context.Canceled) {
-			m.ProbeImportTimedOut = true
-			slog.Warn("local skill import HasPending timed out", "runtime_id", runtimeID, "elapsed_ms", m.ProbeImportMs)
-		} else {
-			slog.Warn("local skill import HasPending failed", "error", probeErr, "runtime_id", runtimeID)
-		}
-	}
-
 	return ack, m, nil
 }
 
@@ -770,9 +703,9 @@ func (h *Handler) processHeartbeat(ctx context.Context, rt db.AgentRuntime) (*pr
 // auth_ms is further decomposed into decode_ms, runtime_lookup_ms, and
 // workspace_check_ms; auth_path labels which token kind authenticated the
 // request ("daemon_token", "pat", or "jwt"). Mirrors logClaimEndpointSlow.
-func logHeartbeatEndpointSlow(runtimeID, outcome, authPath string, start time.Time, decodeMs, runtimeLookupMs, workspaceCheckMs, authMs, updateMs, probeModelMs, popModelMs, probeSkillsMs, popSkillsMs, probeImportMs, popImportMs int64, probeModelTimedOut, probeSkillsTimedOut, probeImportTimedOut bool) {
+func logHeartbeatEndpointSlow(runtimeID, outcome, authPath string, start time.Time, decodeMs, runtimeLookupMs, workspaceCheckMs, authMs, updateMs, probeModelMs, popModelMs int64, probeModelTimedOut bool) {
 	totalMs := time.Since(start).Milliseconds()
-	if totalMs < 500 && !probeModelTimedOut && !probeSkillsTimedOut && !probeImportTimedOut {
+	if totalMs < 500 && !probeModelTimedOut {
 		return
 	}
 	slog.Info("heartbeat_endpoint slow",
@@ -787,13 +720,7 @@ func logHeartbeatEndpointSlow(runtimeID, outcome, authPath string, start time.Ti
 		"update_ms", updateMs,
 		"probe_model_ms", probeModelMs,
 		"pop_model_ms", popModelMs,
-		"probe_skills_ms", probeSkillsMs,
-		"pop_skills_ms", popSkillsMs,
-		"probe_import_ms", probeImportMs,
-		"pop_import_ms", popImportMs,
 		"probe_model_timed_out", probeModelTimedOut,
-		"probe_skills_timed_out", probeSkillsTimedOut,
-		"probe_import_timed_out", probeImportTimedOut,
 	)
 }
 

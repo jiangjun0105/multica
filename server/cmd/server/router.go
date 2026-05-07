@@ -58,12 +58,10 @@ func allowedOrigins() []string {
 }
 
 // NewRouter creates the fully-configured Chi router with all middleware and routes.
-// rdb is optional: when non-nil the runtime local-skill request stores are
-// swapped for Redis-backed implementations so multiple API nodes share the
-// same pending queue (required for multi-node prod). This should be a request
-// path Redis client, not the realtime relay's blocking read client. A nil rdb
-// keeps the default in-memory stores which are fine for single-node dev and
-// tests.
+// rdb is optional: when non-nil request stores (e.g. model list) are swapped
+// for Redis-backed implementations so multiple API nodes share the same pending
+// queue (required for multi-node prod). A nil rdb keeps the default in-memory
+// stores which are fine for single-node dev and tests.
 func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, analyticsClient analytics.Client, rdb *redis.Client) chi.Router {
 	return NewRouterWithOptions(pool, hub, bus, analyticsClient, rdb, RouterOptions{})
 }
@@ -107,8 +105,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	}
 	if rdb != nil {
 		h.ModelListStore = handler.NewRedisModelListStore(rdb)
-		h.LocalSkillListStore = handler.NewRedisLocalSkillListStore(rdb)
-		h.LocalSkillImportStore = handler.NewRedisLocalSkillImportStore(rdb)
 	}
 	// Auth caches: PAT cache is shared between the regular Auth middleware,
 	// the DaemonAuth fallback (mul_) path, and the revoke handler
@@ -216,8 +212,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		r.Get("/runtimes/{runtimeId}/tasks/pending", h.ListPendingTasksByRuntime)
 		r.Post("/runtimes/{runtimeId}/update/{updateId}/result", h.ReportUpdateResult)
 		r.Post("/runtimes/{runtimeId}/models/{requestId}/result", h.ReportModelListResult)
-		r.Post("/runtimes/{runtimeId}/local-skills/{requestId}/result", h.ReportLocalSkillListResult)
-		r.Post("/runtimes/{runtimeId}/local-skills/import/{requestId}/result", h.ReportLocalSkillImportResult)
 
 		r.Get("/tasks/{taskId}/status", h.GetTaskStatus)
 		r.Post("/tasks/{taskId}/start", h.StartTask)
@@ -445,10 +439,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Get("/update/{updateId}", h.GetUpdate)
 					r.Post("/models", h.InitiateListModels)
 					r.Get("/models/{requestId}", h.GetModelListRequest)
-					r.Post("/local-skills", h.InitiateListLocalSkills)
-					r.Get("/local-skills/{requestId}", h.GetLocalSkillListRequest)
-					r.Post("/local-skills/import", h.InitiateImportLocalSkill)
-					r.Get("/local-skills/import/{requestId}", h.GetLocalSkillImportRequest)
 					r.Delete("/", h.DeleteAgentRuntime)
 				})
 			})

@@ -61,8 +61,6 @@ type Handler struct {
 	EmailService          *service.EmailService
 	UpdateStore           *UpdateStore
 	ModelListStore        ModelListStore
-	LocalSkillListStore   LocalSkillListStore
-	LocalSkillImportStore LocalSkillImportStore
 	Storage               storage.Storage
 	CFSigner              *auth.CloudFrontSigner
 	Analytics             analytics.Client
@@ -99,8 +97,6 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 		EmailService:          emailService,
 		UpdateStore:           NewUpdateStore(),
 		ModelListStore:        NewInMemoryModelListStore(),
-		LocalSkillListStore:   NewInMemoryLocalSkillListStore(),
-		LocalSkillImportStore: NewInMemoryLocalSkillImportStore(),
 		Storage:               store,
 		CFSigner:              cfSigner,
 		Analytics:             analyticsClient,

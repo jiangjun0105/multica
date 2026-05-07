@@ -98,12 +98,10 @@ type DaemonHeartbeatRequestPayload struct {
 // DaemonHeartbeatAckPayload is the server's reply to DaemonHeartbeatRequestPayload.
 // JSON shape mirrors the HTTP heartbeat response so daemon code can decode either.
 type DaemonHeartbeatAckPayload struct {
-	RuntimeID               string                                  `json:"runtime_id"`
-	Status                  string                                  `json:"status"`
-	PendingUpdate           *DaemonHeartbeatPendingUpdate           `json:"pending_update,omitempty"`
-	PendingModelList        *DaemonHeartbeatPendingModelList        `json:"pending_model_list,omitempty"`
-	PendingLocalSkills      *DaemonHeartbeatPendingLocalSkills      `json:"pending_local_skills,omitempty"`
-	PendingLocalSkillImport *DaemonHeartbeatPendingLocalSkillImport `json:"pending_local_skill_import,omitempty"`
+	RuntimeID        string                           `json:"runtime_id"`
+	Status           string                           `json:"status"`
+	PendingUpdate    *DaemonHeartbeatPendingUpdate    `json:"pending_update,omitempty"`
+	PendingModelList *DaemonHeartbeatPendingModelList `json:"pending_model_list,omitempty"`
 }
 
 // DaemonHeartbeatPendingUpdate describes a CLI-update action the daemon
@@ -119,15 +117,3 @@ type DaemonHeartbeatPendingModelList struct {
 	ID string `json:"id"`
 }
 
-// DaemonHeartbeatPendingLocalSkills describes a request for the runtime's
-// local-skill inventory.
-type DaemonHeartbeatPendingLocalSkills struct {
-	ID string `json:"id"`
-}
-
-// DaemonHeartbeatPendingLocalSkillImport describes a request to import a
-// specific runtime local skill.
-type DaemonHeartbeatPendingLocalSkillImport struct {
-	ID       string `json:"id"`
-	SkillKey string `json:"skill_key"`
-}
