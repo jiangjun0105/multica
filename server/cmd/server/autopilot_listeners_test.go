@@ -29,14 +29,14 @@ func TestAutopilotRunOnlyTaskTerminalEventsUpdateRun(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		finalize   func(task db.AgentTaskQueue)
+		finalize   func(task db.TaskRun)
 		wantStatus string
 		wantResult string
 		wantReason string
 	}{
 		{
 			name: "completed",
-			finalize: func(task db.AgentTaskQueue) {
+			finalize: func(task db.TaskRun) {
 				if _, err := taskSvc.CompleteTask(ctx, task.ID, []byte(`{"output":"done"}`), "", ""); err != nil {
 					t.Fatalf("CompleteTask: %v", err)
 				}
@@ -46,7 +46,7 @@ func TestAutopilotRunOnlyTaskTerminalEventsUpdateRun(t *testing.T) {
 		},
 		{
 			name: "failed",
-			finalize: func(task db.AgentTaskQueue) {
+			finalize: func(task db.TaskRun) {
 				if _, err := taskSvc.FailTask(ctx, task.ID, "boom", "", "", "agent_error"); err != nil {
 					t.Fatalf("FailTask: %v", err)
 				}
@@ -87,7 +87,7 @@ func TestAutopilotRunOnlyTaskTerminalEventsUpdateRun(t *testing.T) {
 			}
 
 			if _, err := testPool.Exec(ctx,
-				`UPDATE agent_task_queue SET status = 'dispatched', dispatched_at = now() WHERE id = $1`,
+				`UPDATE task_run SET status = 'dispatched', dispatched_at = now() WHERE id = $1`,
 				run.TaskID,
 			); err != nil {
 				t.Fatalf("mark task dispatched: %v", err)

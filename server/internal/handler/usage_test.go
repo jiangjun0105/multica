@@ -53,7 +53,7 @@ func TestWorkspaceUsage_BucketsByUsageTime(t *testing.T) {
 	insertTaskWithUsage := func(enqueueAt, usageAt time.Time, inputTokens int64) {
 		var taskID string
 		if err := testPool.QueryRow(ctx, `
-			INSERT INTO agent_task_queue (agent_id, issue_id, runtime_id, status, created_at)
+			INSERT INTO task_run (agent_id, task_id, runtime_id, status, created_at)
 			VALUES ($1, $2, $3, 'completed', $4)
 			RETURNING id
 		`, agentID, issueID, runtimeID, enqueueAt).Scan(&taskID); err != nil {
@@ -66,7 +66,7 @@ func TestWorkspaceUsage_BucketsByUsageTime(t *testing.T) {
 			t.Fatalf("insert task_usage: %v", err)
 		}
 		t.Cleanup(func() {
-			testPool.Exec(ctx, `DELETE FROM agent_task_queue WHERE id = $1`, taskID)
+			testPool.Exec(ctx, `DELETE FROM task_run WHERE id = $1`, taskID)
 		})
 	}
 

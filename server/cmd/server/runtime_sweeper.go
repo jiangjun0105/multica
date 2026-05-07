@@ -152,7 +152,7 @@ func sweepStaleTasks(ctx context.Context, queries *db.Queries, taskSvc *service.
 // in this package. New call sites should use TaskService.HandleFailedTasks
 // directly so the side effects (event broadcast, agent reconcile, issue
 // rollback, auto-retry) are guaranteed in one place.
-func broadcastFailedTasks(ctx context.Context, queries *db.Queries, taskSvc *service.TaskService, bus *events.Bus, tasks []db.AgentTaskQueue) {
+func broadcastFailedTasks(ctx context.Context, queries *db.Queries, taskSvc *service.TaskService, bus *events.Bus, tasks []db.TaskRun) {
 	if taskSvc != nil {
 		taskSvc.HandleFailedTasks(ctx, tasks)
 		return
@@ -167,14 +167,14 @@ func broadcastFailedTasks(ctx context.Context, queries *db.Queries, taskSvc *ser
 			failureReason = t.FailureReason.String
 		}
 		workspaceID := ""
-		if t.IssueID.Valid {
-			if issue, err := queries.GetIssue(ctx, t.IssueID); err == nil {
+		if t.TaskID.Valid {
+			if issue, err := queries.GetIssue(ctx, t.TaskID); err == nil {
 				workspaceID = util.UUIDToString(issue.WorkspaceID)
-				issueKey := util.UUIDToString(t.IssueID)
+				issueKey := util.UUIDToString(t.TaskID)
 				if issue.Status == "in_progress" && !processedIssues[issueKey] {
 					processedIssues[issueKey] = true
-					if hasActive, herr := queries.HasActiveTaskForIssue(ctx, t.IssueID); herr == nil && !hasActive {
-						queries.UpdateIssueStatus(ctx, db.UpdateIssueStatusParams{ID: t.IssueID, Status: "todo"})
+					if hasActive, herr := queries.HasActiveTaskForIssue(ctx, t.TaskID); herr == nil && !hasActive {
+						queries.UpdateIssueStatus(ctx, db.UpdateIssueStatusParams{ID: t.TaskID, Status: "todo"})
 					}
 				}
 			}
@@ -186,7 +186,7 @@ func broadcastFailedTasks(ctx context.Context, queries *db.Queries, taskSvc *ser
 			Payload: map[string]any{
 				"task_id":        util.UUIDToString(t.ID),
 				"agent_id":       util.UUIDToString(t.AgentID),
-				"issue_id":       util.UUIDToString(t.IssueID),
+				"issue_id":       util.UUIDToString(t.TaskID),
 				"status":         "failed",
 				"failure_reason": failureReason,
 			},

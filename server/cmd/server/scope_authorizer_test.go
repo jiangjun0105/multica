@@ -13,16 +13,16 @@ import (
 
 // fakeScopeQuerier implements scopeAuthQuerier with in-memory maps.
 type fakeScopeQuerier struct {
-	tasks    map[[16]byte]db.AgentTaskQueue
+	tasks    map[[16]byte]db.TaskRun
 	issues   map[[16]byte]db.Issue
 	sessions map[[16]byte]db.ChatSession
 }
 
-func (f *fakeScopeQuerier) GetAgentTask(_ context.Context, id pgtype.UUID) (db.AgentTaskQueue, error) {
+func (f *fakeScopeQuerier) GetAgentTask(_ context.Context, id pgtype.UUID) (db.TaskRun, error) {
 	if t, ok := f.tasks[id.Bytes]; ok {
 		return t, nil
 	}
-	return db.AgentTaskQueue{}, errors.New("not found")
+	return db.TaskRun{}, errors.New("not found")
 }
 func (f *fakeScopeQuerier) GetIssue(_ context.Context, id pgtype.UUID) (db.Issue, error) {
 	if i, ok := f.issues[id.Bytes]; ok {
@@ -120,7 +120,7 @@ func TestScopeAuthorizer_ChatTaskRequiresCreator(t *testing.T) {
 	_ = sessStr
 
 	q := &fakeScopeQuerier{
-		tasks: map[[16]byte]db.AgentTaskQueue{
+		tasks: map[[16]byte]db.TaskRun{
 			taskUUID.Bytes: {
 				ID:            taskUUID,
 				ChatSessionID: sessUUID,
@@ -158,10 +158,10 @@ func TestScopeAuthorizer_IssueTaskWorkspaceOnly(t *testing.T) {
 	_, issueUUID := mustUUID(t)
 
 	q := &fakeScopeQuerier{
-		tasks: map[[16]byte]db.AgentTaskQueue{
+		tasks: map[[16]byte]db.TaskRun{
 			taskUUID.Bytes: {
-				ID:      taskUUID,
-				IssueID: issueUUID,
+				ID:     taskUUID,
+				TaskID: issueUUID,
 			},
 		},
 		issues: map[[16]byte]db.Issue{

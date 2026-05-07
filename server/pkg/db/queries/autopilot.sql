@@ -157,7 +157,7 @@ RETURNING t.*, a.workspace_id AS autopilot_workspace_id;
 -- =====================
 
 -- name: CreateAutopilotTask :one
-INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, autopilot_run_id, trigger_summary)
+INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, autopilot_run_id, trigger_summary)
 VALUES ($1, $2, NULL, 'queued', $3, $4, sqlc.narg(trigger_summary))
 RETURNING *;
 

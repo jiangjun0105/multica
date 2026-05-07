@@ -14,7 +14,7 @@ import (
 
 // mockRow implements pgx.Row, returning either a scanned task or pgx.ErrNoRows.
 type mockRow struct {
-	task *db.AgentTaskQueue
+	task *db.TaskRun
 	err  error
 }
 
@@ -24,7 +24,7 @@ func (r *mockRow) Scan(dest ...any) error {
 	}
 	t := r.task
 	ptrs := []any{
-		&t.ID, &t.AgentID, &t.IssueID, &t.Status, &t.Priority,
+		&t.ID, &t.AgentID, &t.TaskID, &t.Status, &t.Priority,
 		&t.DispatchedAt, &t.StartedAt, &t.CompletedAt, &t.Result,
 		&t.Error, &t.CreatedAt, &t.Context, &t.RuntimeID,
 		&t.SessionID, &t.WorkDir, &t.TriggerCommentID,
@@ -56,7 +56,7 @@ func (r *mockRow) Scan(dest ...any) error {
 // mockDBTX routes QueryRow calls: complete/fail queries return ErrNoRows,
 // getAgentTask returns the stored task.
 type mockDBTX struct {
-	task db.AgentTaskQueue
+	task db.TaskRun
 }
 
 func (m *mockDBTX) Exec(_ context.Context, _ string, _ ...interface{}) (pgconn.CommandTag, error) {
@@ -98,7 +98,7 @@ func TestCompleteTask_AlreadyFinalized(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := &mockDBTX{task: db.AgentTaskQueue{
+			mock := &mockDBTX{task: db.TaskRun{
 				ID:      taskID,
 				AgentID: agentID,
 				Status:  tt.status,
@@ -140,7 +140,7 @@ func TestFailTask_AlreadyFinalized(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := &mockDBTX{task: db.AgentTaskQueue{
+			mock := &mockDBTX{task: db.TaskRun{
 				ID:      taskID,
 				AgentID: agentID,
 				Status:  tt.status,
