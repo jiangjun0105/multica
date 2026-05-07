@@ -220,11 +220,9 @@ func (c *Client) GetTaskStatus(ctx context.Context, taskID string) (string, erro
 // heartbeat paths share a single type and a single decoder shape. Aliases
 // (rather than wrappers) keep call sites unchanged.
 type (
-	HeartbeatResponse       = protocol.DaemonHeartbeatAckPayload
-	PendingUpdate           = protocol.DaemonHeartbeatPendingUpdate
-	PendingModelList        = protocol.DaemonHeartbeatPendingModelList
-	PendingLocalSkills      = protocol.DaemonHeartbeatPendingLocalSkills
-	PendingLocalSkillImport = protocol.DaemonHeartbeatPendingLocalSkillImport
+	HeartbeatResponse = protocol.DaemonHeartbeatAckPayload
+	PendingUpdate     = protocol.DaemonHeartbeatPendingUpdate
+	PendingModelList  = protocol.DaemonHeartbeatPendingModelList
 )
 
 func (c *Client) SendHeartbeat(ctx context.Context, runtimeID string) (*HeartbeatResponse, error) {
@@ -245,16 +243,6 @@ func (c *Client) ReportUpdateResult(ctx context.Context, runtimeID, updateID str
 // ReportModelListResult sends the model-discovery result back to the server.
 func (c *Client) ReportModelListResult(ctx context.Context, runtimeID, requestID string, result map[string]any) error {
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/models/%s/result", runtimeID, requestID), result, nil)
-}
-
-// ReportLocalSkillListResult sends the runtime-local-skill inventory back to the server.
-func (c *Client) ReportLocalSkillListResult(ctx context.Context, runtimeID, requestID string, result map[string]any) error {
-	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/local-skills/%s/result", runtimeID, requestID), result, nil)
-}
-
-// ReportLocalSkillImportResult sends a runtime-local-skill bundle back to the server.
-func (c *Client) ReportLocalSkillImportResult(ctx context.Context, runtimeID, requestID string, result map[string]any) error {
-	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/local-skills/import/%s/result", runtimeID, requestID), result, nil)
 }
 
 // WorkspaceInfo holds minimal workspace metadata returned by the API.

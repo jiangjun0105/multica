@@ -136,7 +136,7 @@ func (q *Queries) FailTasksForOfflineRuntimes(ctx context.Context) ([]TaskRun, e
 }
 
 const findLegacyRuntimesByDaemonID = `-- name: FindLegacyRuntimesByDaemonID :many
-SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
+SELECT id, workspace_id, daemon_id, name, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
 WHERE workspace_id = $1
   AND provider = $2
   AND LOWER(daemon_id) = LOWER($3)
@@ -177,7 +177,6 @@ func (q *Queries) FindLegacyRuntimesByDaemonID(ctx context.Context, arg FindLega
 			&i.WorkspaceID,
 			&i.DaemonID,
 			&i.Name,
-			&i.RuntimeMode,
 			&i.Provider,
 			&i.Status,
 			&i.DeviceInfo,
@@ -199,7 +198,7 @@ func (q *Queries) FindLegacyRuntimesByDaemonID(ctx context.Context, arg FindLega
 }
 
 const getAgentRuntime = `-- name: GetAgentRuntime :one
-SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
+SELECT id, workspace_id, daemon_id, name, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
 WHERE id = $1
 `
 
@@ -211,7 +210,6 @@ func (q *Queries) GetAgentRuntime(ctx context.Context, id pgtype.UUID) (AgentRun
 		&i.WorkspaceID,
 		&i.DaemonID,
 		&i.Name,
-		&i.RuntimeMode,
 		&i.Provider,
 		&i.Status,
 		&i.DeviceInfo,
@@ -226,7 +224,7 @@ func (q *Queries) GetAgentRuntime(ctx context.Context, id pgtype.UUID) (AgentRun
 }
 
 const getAgentRuntimeForWorkspace = `-- name: GetAgentRuntimeForWorkspace :one
-SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
+SELECT id, workspace_id, daemon_id, name, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
 WHERE id = $1 AND workspace_id = $2
 `
 
@@ -243,7 +241,6 @@ func (q *Queries) GetAgentRuntimeForWorkspace(ctx context.Context, arg GetAgentR
 		&i.WorkspaceID,
 		&i.DaemonID,
 		&i.Name,
-		&i.RuntimeMode,
 		&i.Provider,
 		&i.Status,
 		&i.DeviceInfo,
@@ -258,7 +255,7 @@ func (q *Queries) GetAgentRuntimeForWorkspace(ctx context.Context, arg GetAgentR
 }
 
 const listAgentRuntimes = `-- name: ListAgentRuntimes :many
-SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
+SELECT id, workspace_id, daemon_id, name, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
 WHERE workspace_id = $1
 ORDER BY created_at ASC
 `
@@ -277,7 +274,6 @@ func (q *Queries) ListAgentRuntimes(ctx context.Context, workspaceID pgtype.UUID
 			&i.WorkspaceID,
 			&i.DaemonID,
 			&i.Name,
-			&i.RuntimeMode,
 			&i.Provider,
 			&i.Status,
 			&i.DeviceInfo,
@@ -299,7 +295,7 @@ func (q *Queries) ListAgentRuntimes(ctx context.Context, workspaceID pgtype.UUID
 }
 
 const listAgentRuntimesByOwner = `-- name: ListAgentRuntimesByOwner :many
-SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
+SELECT id, workspace_id, daemon_id, name, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id FROM agent_runtime
 WHERE workspace_id = $1 AND owner_id = $2
 ORDER BY created_at ASC
 `
@@ -323,7 +319,6 @@ func (q *Queries) ListAgentRuntimesByOwner(ctx context.Context, arg ListAgentRun
 			&i.WorkspaceID,
 			&i.DaemonID,
 			&i.Name,
-			&i.RuntimeMode,
 			&i.Provider,
 			&i.Status,
 			&i.DeviceInfo,
@@ -454,7 +449,7 @@ const updateAgentRuntimeHeartbeat = `-- name: UpdateAgentRuntimeHeartbeat :one
 UPDATE agent_runtime
 SET status = 'online', last_seen_at = now(), updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id
+RETURNING id, workspace_id, daemon_id, name, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id
 `
 
 func (q *Queries) UpdateAgentRuntimeHeartbeat(ctx context.Context, id pgtype.UUID) (AgentRuntime, error) {
@@ -465,7 +460,6 @@ func (q *Queries) UpdateAgentRuntimeHeartbeat(ctx context.Context, id pgtype.UUI
 		&i.WorkspaceID,
 		&i.DaemonID,
 		&i.Name,
-		&i.RuntimeMode,
 		&i.Provider,
 		&i.Status,
 		&i.DeviceInfo,
@@ -484,32 +478,29 @@ INSERT INTO agent_runtime (
     workspace_id,
     daemon_id,
     name,
-    runtime_mode,
     provider,
     status,
     device_info,
     metadata,
     owner_id,
     last_seen_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
 ON CONFLICT (workspace_id, daemon_id, provider)
 DO UPDATE SET
     name = EXCLUDED.name,
-    runtime_mode = EXCLUDED.runtime_mode,
     status = EXCLUDED.status,
     device_info = EXCLUDED.device_info,
     metadata = EXCLUDED.metadata,
     owner_id = COALESCE(EXCLUDED.owner_id, agent_runtime.owner_id),
     last_seen_at = now(),
     updated_at = now()
-RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, (xmax = 0) AS inserted
+RETURNING id, workspace_id, daemon_id, name, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, (xmax = 0) AS inserted
 `
 
 type UpsertAgentRuntimeParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	DaemonID    pgtype.Text `json:"daemon_id"`
 	Name        string      `json:"name"`
-	RuntimeMode string      `json:"runtime_mode"`
 	Provider    string      `json:"provider"`
 	Status      string      `json:"status"`
 	DeviceInfo  string      `json:"device_info"`
@@ -522,7 +513,6 @@ type UpsertAgentRuntimeRow struct {
 	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
 	DaemonID       pgtype.Text        `json:"daemon_id"`
 	Name           string             `json:"name"`
-	RuntimeMode    string             `json:"runtime_mode"`
 	Provider       string             `json:"provider"`
 	Status         string             `json:"status"`
 	DeviceInfo     string             `json:"device_info"`
@@ -543,7 +533,6 @@ func (q *Queries) UpsertAgentRuntime(ctx context.Context, arg UpsertAgentRuntime
 		arg.WorkspaceID,
 		arg.DaemonID,
 		arg.Name,
-		arg.RuntimeMode,
 		arg.Provider,
 		arg.Status,
 		arg.DeviceInfo,
@@ -556,7 +545,6 @@ func (q *Queries) UpsertAgentRuntime(ctx context.Context, arg UpsertAgentRuntime
 		&i.WorkspaceID,
 		&i.DaemonID,
 		&i.Name,
-		&i.RuntimeMode,
 		&i.Provider,
 		&i.Status,
 		&i.DeviceInfo,

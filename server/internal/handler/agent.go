@@ -34,7 +34,6 @@ type AgentResponse struct {
 	Description        string            `json:"description"`
 	Instructions       string            `json:"instructions"`
 	AvatarURL          *string           `json:"avatar_url"`
-	RuntimeMode        string            `json:"runtime_mode"`
 	RuntimeConfig      any               `json:"runtime_config"`
 	CustomEnv          map[string]string `json:"custom_env"`
 	CustomArgs         []string          `json:"custom_args"`
@@ -95,7 +94,6 @@ func agentToResponse(a db.Agent) AgentResponse {
 		Description:        a.Description,
 		Instructions:       a.Instructions,
 		AvatarURL:          textToPtr(a.AvatarUrl),
-		RuntimeMode:        a.RuntimeMode,
 		RuntimeConfig:      rc,
 		CustomEnv:          customEnv,
 		CustomArgs:         customArgs,
@@ -462,7 +460,6 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		Description:        req.Description,
 		Instructions:       req.Instructions,
 		AvatarUrl:          ptrToText(req.AvatarURL),
-		RuntimeMode:        runtime.RuntimeMode,
 		RuntimeConfig:      rc,
 		RuntimeID:          runtime.ID,
 		Visibility:         req.Visibility,
@@ -641,7 +638,6 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		params.RuntimeID = runtime.ID
-		params.RuntimeMode = pgtype.Text{String: runtime.RuntimeMode, Valid: true}
 	}
 	if req.Visibility != nil {
 		params.Visibility = pgtype.Text{String: *req.Visibility, Valid: true}

@@ -111,9 +111,9 @@ func setupHandlerTestFixture(ctx context.Context, pool *pgxpool.Pool) (string, s
 	var runtimeID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO agent_runtime (
-			workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at
+			workspace_id, daemon_id, name, provider, status, device_info, metadata, last_seen_at
 		)
-		VALUES ($1, NULL, $2, 'cloud', $3, 'online', $4, '{}'::jsonb, now())
+		VALUES ($1, NULL, $2, $3, 'online', $4, '{}'::jsonb, now())
 		RETURNING id
 	`, workspaceID, "Handler Test Runtime", "handler_test_runtime", "Handler test runtime").Scan(&runtimeID); err != nil {
 		return "", "", err
@@ -122,10 +122,10 @@ func setupHandlerTestFixture(ctx context.Context, pool *pgxpool.Pool) (string, s
 
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO agent (
-			workspace_id, name, description, runtime_mode, runtime_config,
+			workspace_id, name, description, runtime_config,
 			runtime_id, visibility, max_concurrent_tasks, owner_id
 		)
-		VALUES ($1, $2, '', 'cloud', '{}'::jsonb, $3, 'workspace', 1, $4)
+		VALUES ($1, $2, '', '{}'::jsonb, $3, 'workspace', 1, $4)
 	`, workspaceID, "Handler Test Agent", runtimeID, userID); err != nil {
 		return "", "", err
 	}
@@ -181,11 +181,11 @@ func createHandlerTestAgent(t *testing.T, name string, mcpConfig []byte) string 
 	var agentID string
 	if err := testPool.QueryRow(context.Background(), `
 		INSERT INTO agent (
-			workspace_id, name, description, runtime_mode, runtime_config,
+			workspace_id, name, description, runtime_config,
 			runtime_id, visibility, max_concurrent_tasks, owner_id,
 			instructions, custom_env, custom_args, mcp_config
 		)
-		VALUES ($1, $2, '', 'cloud', '{}'::jsonb, $3, 'private', 1, $4, '', '{}'::jsonb, '[]'::jsonb, $5)
+		VALUES ($1, $2, '', '{}'::jsonb, $3, 'private', 1, $4, '', '{}'::jsonb, '[]'::jsonb, $5)
 		RETURNING id
 	`, testWorkspaceID, name, handlerTestRuntimeID(t), testUserID, mcpConfig).Scan(&agentID); err != nil {
 		t.Fatalf("failed to create handler test agent: %v", err)

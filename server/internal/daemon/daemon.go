@@ -713,16 +713,6 @@ func (d *Daemon) handleHeartbeatActions(ctx context.Context, runtimeID string, r
 			go d.handleModelList(ctx, *rt, resp.PendingModelList.ID)
 		}
 	}
-	if resp.PendingLocalSkills != nil {
-		if rt := d.findRuntime(runtimeID); rt != nil {
-			go d.handleLocalSkillList(ctx, *rt, resp.PendingLocalSkills.ID)
-		}
-	}
-	if resp.PendingLocalSkillImport != nil {
-		if rt := d.findRuntime(runtimeID); rt != nil {
-			go d.handleLocalSkillImport(ctx, *rt, *resp.PendingLocalSkillImport)
-		}
-	}
 }
 
 // handleModelList resolves the provider's supported models (via static
@@ -776,75 +766,12 @@ func (d *Daemon) handleModelList(ctx context.Context, rt Runtime, requestID stri
 	})
 }
 
-func (d *Daemon) handleLocalSkillList(ctx context.Context, rt Runtime, requestID string) {
-	d.logger.Info("runtime local skills requested", "runtime_id", rt.ID, "request_id", requestID, "provider", rt.Provider)
-
-	skills, supported, err := listRuntimeLocalSkills(rt.Provider)
-	if err != nil {
-		d.reportLocalSkillListResult(ctx, rt, requestID, map[string]any{
-			"status": "failed",
-			"error":  err.Error(),
-		})
-		return
-	}
-
-	d.reportLocalSkillListResult(ctx, rt, requestID, map[string]any{
-		"status":    "completed",
-		"skills":    skills,
-		"supported": supported,
-	})
-}
-
-func (d *Daemon) handleLocalSkillImport(ctx context.Context, rt Runtime, pending PendingLocalSkillImport) {
-	d.logger.Info("runtime local skill import requested", "runtime_id", rt.ID, "request_id", pending.ID, "provider", rt.Provider, "skill_key", pending.SkillKey)
-
-	skill, supported, err := loadRuntimeLocalSkillBundle(rt.Provider, pending.SkillKey)
-	if err != nil {
-		d.reportLocalSkillImportResult(ctx, rt, pending.ID, map[string]any{
-			"status": "failed",
-			"error":  err.Error(),
-		})
-		return
-	}
-	if !supported {
-		d.reportLocalSkillImportResult(ctx, rt, pending.ID, map[string]any{
-			"status": "failed",
-			"error":  fmt.Sprintf("provider %q does not expose runtime local skills", rt.Provider),
-		})
-		return
-	}
-
-	d.reportLocalSkillImportResult(ctx, rt, pending.ID, map[string]any{
-		"status": "completed",
-		"skill":  skill,
-	})
-}
-
 // runtimeReportBackoffs defines the retry schedule for delivering any
-// daemon→server async result (model list, local-skill list, local-skill
-// import). First attempt runs immediately, then we back off. The sum
-// (≈6.5s) stays well under the server-side running timeout (60s) so a
-// report that eventually lands still updates the request instead of
-// racing a timeout transition.
+// daemon→server async result (model list). First attempt runs immediately,
+// then we back off.
 //
 // Overridable for tests to avoid real sleeps.
 var runtimeReportBackoffs = []time.Duration{0, 500 * time.Millisecond, 2 * time.Second, 4 * time.Second}
-
-// reportLocalSkillListResult delivers a list-report to the server with retry
-// on transient failures. See reportRuntimeResultWithRetry for semantics.
-func (d *Daemon) reportLocalSkillListResult(ctx context.Context, rt Runtime, requestID string, payload map[string]any) {
-	d.reportRuntimeResultWithRetry(ctx, "local_skill_list", rt.ID, requestID, func(ctx context.Context) error {
-		return d.client.ReportLocalSkillListResult(ctx, rt.ID, requestID, payload)
-	})
-}
-
-// reportLocalSkillImportResult delivers an import-report to the server with
-// retry on transient failures.
-func (d *Daemon) reportLocalSkillImportResult(ctx context.Context, rt Runtime, requestID string, payload map[string]any) {
-	d.reportRuntimeResultWithRetry(ctx, "local_skill_import", rt.ID, requestID, func(ctx context.Context) error {
-		return d.client.ReportLocalSkillImportResult(ctx, rt.ID, requestID, payload)
-	})
-}
 
 // reportModelListResult delivers a model-list report to the server with retry
 // on transient failures. Without this the daemon used to fire once and

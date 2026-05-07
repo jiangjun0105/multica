@@ -1666,7 +1666,6 @@ func agentToMap(a db.Agent) map[string]any {
 		"name":                 a.Name,
 		"description":          a.Description,
 		"avatar_url":           util.TextToPtr(a.AvatarUrl),
-		"runtime_mode":         a.RuntimeMode,
 		"runtime_config":       rc,
 		"visibility":           a.Visibility,
 		"status":               a.Status,
