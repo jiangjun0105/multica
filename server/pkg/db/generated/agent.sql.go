@@ -337,10 +337,8 @@ WHERE id = (
               OR (
                 atq.task_id IS NULL
                 AND atq.chat_session_id IS NULL
-                AND atq.autopilot_run_id IS NULL
                 AND active.task_id IS NULL
                 AND active.chat_session_id IS NULL
-                AND active.autopilot_run_id IS NULL
               )
             )
       )
@@ -676,13 +674,13 @@ func (q *Queries) CreateQuickCreateTask(ctx context.Context, arg CreateQuickCrea
 
 const createRetryTask = `-- name: CreateRetryTask :one
 INSERT INTO task_run (
-    agent_id, runtime_id, task_id, chat_session_id, autopilot_run_id,
+    agent_id, runtime_id, task_id, chat_session_id,
     status, priority, trigger_comment_id, trigger_summary, context,
     session_id, work_dir,
     attempt, max_attempts, parent_task_id
 )
 SELECT
-    p.agent_id, p.runtime_id, p.task_id, p.chat_session_id, p.autopilot_run_id,
+    p.agent_id, p.runtime_id, p.task_id, p.chat_session_id,
     'queued', p.priority, p.trigger_comment_id, p.trigger_summary, p.context,
     p.session_id, p.work_dir,
     p.attempt + 1, p.max_attempts, p.id

@@ -1572,7 +1572,7 @@ func TestClaimTask_IssuePriorSessionRuntimeGuard(t *testing.T) {
 	if _, err := testPool.Exec(ctx, `
 		UPDATE task_run
 		SET status = 'completed', completed_at = now()
-		WHERE issue_id = $1 AND status IN ('dispatched', 'running')
+		WHERE task_id = $1 AND status IN ('dispatched', 'running')
 	`, skipIssueID); err != nil {
 		t.Fatalf("setup: complete claimed skip task: %v", err)
 	}

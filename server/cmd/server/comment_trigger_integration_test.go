@@ -66,7 +66,7 @@ func latestTriggerCommentID(t *testing.T, issueID string) string {
 	err := testPool.QueryRow(context.Background(),
 		`SELECT trigger_comment_id::text
 		   FROM task_run
-		  WHERE issue_id = $1 AND status IN ('queued', 'dispatched')
+		  WHERE task_id = $1 AND status IN ('queued', 'dispatched')
 		  ORDER BY created_at DESC
 		  LIMIT 1`,
 		issueID).Scan(&triggerID)
