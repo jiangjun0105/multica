@@ -146,12 +146,6 @@ type AgentTaskResponse struct {
 	TriggerAuthorName       string          `json:"trigger_author_name,omitempty"`       // display name of the triggering comment author
 	ChatSessionID           string          `json:"chat_session_id,omitempty"`           // non-empty for chat tasks
 	ChatMessage             string          `json:"chat_message,omitempty"`              // user message for chat tasks
-	AutopilotRunID          string          `json:"autopilot_run_id,omitempty"`          // non-empty for autopilot-spawned tasks
-	AutopilotID             string          `json:"autopilot_id,omitempty"`              // autopilot that spawned this task
-	AutopilotTitle          string          `json:"autopilot_title,omitempty"`           // autopilot title used as task context
-	AutopilotDescription    string          `json:"autopilot_description,omitempty"`     // autopilot description used as task prompt
-	AutopilotSource         string          `json:"autopilot_source,omitempty"`          // manual, schedule, webhook, or api
-	AutopilotTriggerPayload json.RawMessage `json:"autopilot_trigger_payload,omitempty"` // optional trigger payload for webhook/api runs
 	QuickCreatePrompt       string          `json:"quick_create_prompt,omitempty"`       // user's natural-language input for quick-create tasks
 	Kind                    string          `json:"kind"`                                // discriminator: "comment" | "chat" | "quick_create" | "direct" — used by the activity row to label tasks that have no linked issue
 }
@@ -201,7 +195,6 @@ func taskToResponse(t db.TaskRun) AgentTaskResponse {
 		// from chat-spawned ones; both may arrive
 		// with issue_id = "" once a task has no linked issue.
 		ChatSessionID:  uuidToString(t.ChatSessionID),
-		AutopilotRunID: uuidToString(t.AutopilotRunID),
 		Kind:           computeTaskKind(t),
 	}
 }
@@ -215,9 +208,6 @@ func taskToResponse(t db.TaskRun) AgentTaskResponse {
 func computeTaskKind(t db.TaskRun) string {
 	if uuidToString(t.ChatSessionID) != "" {
 		return "chat"
-	}
-	if uuidToString(t.AutopilotRunID) != "" {
-		return "autopilot"
 	}
 	if uuidToString(t.TaskID) == "" {
 		return "quick_create"

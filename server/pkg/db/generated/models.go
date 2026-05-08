@@ -78,53 +78,6 @@ type Attachment struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
-type Autopilot struct {
-	ID                 pgtype.UUID        `json:"id"`
-	WorkspaceID        pgtype.UUID        `json:"workspace_id"`
-	Title              string             `json:"title"`
-	Description        pgtype.Text        `json:"description"`
-	AssigneeID         pgtype.UUID        `json:"assignee_id"`
-	Status             string             `json:"status"`
-	ExecutionMode      string             `json:"execution_mode"`
-	IssueTitleTemplate pgtype.Text        `json:"issue_title_template"`
-	CreatedByType      string             `json:"created_by_type"`
-	CreatedByID        pgtype.UUID        `json:"created_by_id"`
-	LastRunAt          pgtype.Timestamptz `json:"last_run_at"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-}
-
-type AutopilotRun struct {
-	ID             pgtype.UUID        `json:"id"`
-	AutopilotID    pgtype.UUID        `json:"autopilot_id"`
-	TriggerID      pgtype.UUID        `json:"trigger_id"`
-	Source         string             `json:"source"`
-	Status         string             `json:"status"`
-	IssueID        pgtype.UUID        `json:"issue_id"`
-	TaskID         pgtype.UUID        `json:"task_id"`
-	TriggeredAt    pgtype.Timestamptz `json:"triggered_at"`
-	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
-	FailureReason  pgtype.Text        `json:"failure_reason"`
-	TriggerPayload []byte             `json:"trigger_payload"`
-	Result         []byte             `json:"result"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-}
-
-type AutopilotTrigger struct {
-	ID             pgtype.UUID        `json:"id"`
-	AutopilotID    pgtype.UUID        `json:"autopilot_id"`
-	Kind           string             `json:"kind"`
-	Enabled        bool               `json:"enabled"`
-	CronExpression pgtype.Text        `json:"cron_expression"`
-	Timezone       pgtype.Text        `json:"timezone"`
-	NextRunAt      pgtype.Timestamptz `json:"next_run_at"`
-	WebhookToken   pgtype.Text        `json:"webhook_token"`
-	Label          pgtype.Text        `json:"label"`
-	LastFiredAt    pgtype.Timestamptz `json:"last_fired_at"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
 type ChatMessage struct {
 	ID            pgtype.UUID        `json:"id"`
 	ChatSessionID pgtype.UUID        `json:"chat_session_id"`
@@ -402,7 +355,6 @@ type TaskRun struct {
 	WorkDir           pgtype.Text        `json:"work_dir"`
 	TriggerCommentID  pgtype.UUID        `json:"trigger_comment_id"`
 	ChatSessionID     pgtype.UUID        `json:"chat_session_id"`
-	AutopilotRunID    pgtype.UUID        `json:"autopilot_run_id"`
 	Attempt           int32              `json:"attempt"`
 	MaxAttempts       int32              `json:"max_attempts"`
 	ParentTaskID      pgtype.UUID        `json:"parent_task_id"`

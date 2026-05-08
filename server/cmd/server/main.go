@@ -289,14 +289,10 @@ func main() {
 
 	// Start background workers.
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())
-	autopilotCtx, autopilotCancel := context.WithCancel(context.Background())
 	taskSvc := service.NewTaskService(queries, pool, hub, bus, daemonWakeup)
-	autopilotSvc := service.NewAutopilotService(queries, pool, bus, taskSvc)
-	registerAutopilotListeners(bus, autopilotSvc)
 
 	// Start background sweeper to mark stale runtimes as offline.
 	go runRuntimeSweeper(sweepCtx, queries, taskSvc, bus)
-	go runAutopilotScheduler(autopilotCtx, queries, autopilotSvc)
 	go runDBStatsLogger(sweepCtx, pool)
 
 	if metricsServer != nil {
@@ -322,7 +318,6 @@ func main() {
 
 	slog.Info("shutting down server")
 	sweepCancel()
-	autopilotCancel()
 
 	apiShutdownCtx, apiShutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := srv.Shutdown(apiShutdownCtx); err != nil {

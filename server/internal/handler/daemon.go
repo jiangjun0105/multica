@@ -940,41 +940,11 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Autopilot run_only task: resolve workspace from autopilot_run →
-	// autopilot, and include the autopilot instructions because there is no
-	// issue for the agent to fetch.
-	if task.AutopilotRunID.Valid {
-		if run, err := h.Queries.GetAutopilotRun(r.Context(), task.AutopilotRunID); err == nil {
-			resp.AutopilotID = uuidToString(run.AutopilotID)
-			resp.AutopilotSource = run.Source
-			if run.TriggerPayload != nil {
-				resp.AutopilotTriggerPayload = json.RawMessage(run.TriggerPayload)
-			}
-			if ap, err := h.Queries.GetAutopilot(r.Context(), run.AutopilotID); err == nil {
-				resp.AutopilotTitle = ap.Title
-				if ap.Description.Valid {
-					resp.AutopilotDescription = ap.Description.String
-				}
-				if resp.WorkspaceID == "" {
-					resp.WorkspaceID = uuidToString(ap.WorkspaceID)
-				}
-				if len(resp.Repos) == 0 {
-					if ws, err := h.Queries.GetWorkspace(r.Context(), ap.WorkspaceID); err == nil && ws.Repos != nil {
-						var repos []RepoData
-						if json.Unmarshal(ws.Repos, &repos) == nil && len(repos) > 0 {
-							resp.Repos = repos
-						}
-					}
-				}
-			}
-		}
-	}
-
 	// Quick-create task: no issue / chat / autopilot link — workspace and
 	// prompt come from the task's context JSONB. Resolve workspace from
 	// there so the isolation check below has something to compare.
 	hasQuickCreate := false
-	if task.Context != nil && !task.TaskID.Valid && !task.ChatSessionID.Valid && !task.AutopilotRunID.Valid {
+	if task.Context != nil && !task.TaskID.Valid && !task.ChatSessionID.Valid {
 		var qc service.QuickCreateContext
 		if json.Unmarshal(task.Context, &qc) == nil && qc.Type == service.QuickCreateContextType {
 			hasQuickCreate = true
@@ -1006,8 +976,7 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 			"resolved_workspace", resp.WorkspaceID,
 			"has_issue", task.TaskID.Valid,
 			"has_chat", task.ChatSessionID.Valid,
-			"has_autopilot_run", task.AutopilotRunID.Valid,
-			"has_quick_create", hasQuickCreate,
+						"has_quick_create", hasQuickCreate,
 		)
 		if _, cerr := h.TaskService.CancelTask(r.Context(), task.ID); cerr != nil {
 			slog.Error("task claim: cancel after workspace check failed",
