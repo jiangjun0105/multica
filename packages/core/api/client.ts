@@ -4,7 +4,6 @@ import type {
   UpdateIssueRequest,
   ListIssuesResponse,
   SearchIssuesResponse,
-  SearchProjectsResponse,
   UpdateMeRequest,
   CreateMemberRequest,
   UpdateMemberRequest,
@@ -51,13 +50,6 @@ import type {
   ChatPendingTask,
   PendingChatTasksResponse,
   SendChatMessageResponse,
-  Project,
-  CreateProjectRequest,
-  UpdateProjectRequest,
-  ListProjectsResponse,
-  ProjectResource,
-  CreateProjectResourceRequest,
-  ListProjectResourcesResponse,
   Label,
   CreateLabelRequest,
   UpdateLabelRequest,
@@ -68,16 +60,6 @@ import type {
   PinnedItemType,
   ReorderPinsRequest,
   Invitation,
-  Autopilot,
-  AutopilotTrigger,
-  AutopilotRun,
-  CreateAutopilotRequest,
-  UpdateAutopilotRequest,
-  CreateAutopilotTriggerRequest,
-  UpdateAutopilotTriggerRequest,
-  ListAutopilotsResponse,
-  GetAutopilotResponse,
-  ListAutopilotRunsResponse,
   NotificationPreferenceResponse,
   NotificationPreferences,
 } from "../types";
@@ -405,14 +387,6 @@ export class ApiClient {
     if (params.offset !== undefined) search.set("offset", String(params.offset));
     if (params.include_closed) search.set("include_closed", "true");
     return this.fetch(`/api/issues/search?${search}`, params.signal ? { signal: params.signal } : undefined);
-  }
-
-  async searchProjects(params: { q: string; limit?: number; offset?: number; include_closed?: boolean; signal?: AbortSignal }): Promise<SearchProjectsResponse> {
-    const search = new URLSearchParams({ q: params.q });
-    if (params.limit !== undefined) search.set("limit", String(params.limit));
-    if (params.offset !== undefined) search.set("offset", String(params.offset));
-    if (params.include_closed) search.set("include_closed", "true");
-    return this.fetch(`/api/projects/search?${search}`, params.signal ? { signal: params.signal } : undefined);
   }
 
   async getIssue(id: string): Promise<Issue> {
@@ -1048,61 +1022,6 @@ export class ApiClient {
     await this.fetch(`/api/attachments/${id}`, { method: "DELETE" });
   }
 
-  // Projects
-  async listProjects(params?: { status?: string }): Promise<ListProjectsResponse> {
-    const search = new URLSearchParams();
-    if (params?.status) search.set("status", params.status);
-    return this.fetch(`/api/projects?${search}`);
-  }
-
-  async getProject(id: string): Promise<Project> {
-    return this.fetch(`/api/projects/${id}`);
-  }
-
-  async createProject(data: CreateProjectRequest): Promise<Project> {
-    return this.fetch("/api/projects", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateProject(id: string, data: UpdateProjectRequest): Promise<Project> {
-    return this.fetch(`/api/projects/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteProject(id: string): Promise<void> {
-    await this.fetch(`/api/projects/${id}`, { method: "DELETE" });
-  }
-
-  // Project resources
-  async listProjectResources(
-    projectId: string,
-  ): Promise<ListProjectResourcesResponse> {
-    return this.fetch(`/api/projects/${projectId}/resources`);
-  }
-
-  async createProjectResource(
-    projectId: string,
-    data: CreateProjectResourceRequest,
-  ): Promise<ProjectResource> {
-    return this.fetch(`/api/projects/${projectId}/resources`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteProjectResource(
-    projectId: string,
-    resourceId: string,
-  ): Promise<void> {
-    await this.fetch(`/api/projects/${projectId}/resources/${resourceId}`, {
-      method: "DELETE",
-    });
-  }
-
   // Labels
   async listLabels(): Promise<ListLabelsResponse> {
     return this.fetch(`/api/labels`);
@@ -1170,61 +1089,4 @@ export class ApiClient {
     });
   }
 
-  // Autopilots
-  async listAutopilots(params?: { status?: string }): Promise<ListAutopilotsResponse> {
-    const search = new URLSearchParams();
-    if (params?.status) search.set("status", params.status);
-    return this.fetch(`/api/autopilots?${search}`);
-  }
-
-  async getAutopilot(id: string): Promise<GetAutopilotResponse> {
-    return this.fetch(`/api/autopilots/${id}`);
-  }
-
-  async createAutopilot(data: CreateAutopilotRequest): Promise<Autopilot> {
-    return this.fetch("/api/autopilots", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateAutopilot(id: string, data: UpdateAutopilotRequest): Promise<Autopilot> {
-    return this.fetch(`/api/autopilots/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteAutopilot(id: string): Promise<void> {
-    await this.fetch(`/api/autopilots/${id}`, { method: "DELETE" });
-  }
-
-  async triggerAutopilot(id: string): Promise<AutopilotRun> {
-    return this.fetch(`/api/autopilots/${id}/trigger`, { method: "POST" });
-  }
-
-  async listAutopilotRuns(id: string, params?: { limit?: number; offset?: number }): Promise<ListAutopilotRunsResponse> {
-    const search = new URLSearchParams();
-    if (params?.limit) search.set("limit", params.limit.toString());
-    if (params?.offset) search.set("offset", params.offset.toString());
-    return this.fetch(`/api/autopilots/${id}/runs?${search}`);
-  }
-
-  async createAutopilotTrigger(autopilotId: string, data: CreateAutopilotTriggerRequest): Promise<AutopilotTrigger> {
-    return this.fetch(`/api/autopilots/${autopilotId}/triggers`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateAutopilotTrigger(autopilotId: string, triggerId: string, data: UpdateAutopilotTriggerRequest): Promise<AutopilotTrigger> {
-    return this.fetch(`/api/autopilots/${autopilotId}/triggers/${triggerId}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteAutopilotTrigger(autopilotId: string, triggerId: string): Promise<void> {
-    await this.fetch(`/api/autopilots/${autopilotId}/triggers/${triggerId}`, { method: "DELETE" });
-  }
 }

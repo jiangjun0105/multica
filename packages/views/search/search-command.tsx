@@ -13,7 +13,6 @@ import {
   Inbox,
   CircleUser,
   ListTodo,
-  FolderKanban,
   Bot,
   Monitor,
   Moon,
@@ -26,7 +25,7 @@ import {
 import { Command as CommandPrimitive } from "cmdk";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { SearchIssueResult, SearchProjectResult } from "@multica/core/types";
+import type { SearchIssueResult } from "@multica/core/types";
 import { api } from "@multica/core/api";
 import { useRecentIssuesStore } from "@multica/core/issues/stores";
 import { issueDetailOptions } from "@multica/core/issues/queries";
@@ -36,10 +35,7 @@ import type { WorkspacePaths } from "@multica/core/paths";
 import { useModalStore } from "@multica/core/modals";
 import { workspaceListOptions } from "@multica/core/workspace/queries";
 import { StatusIcon } from "../issues/components";
-import { ProjectIcon } from "../projects/components/project-icon";
 import { STATUS_CONFIG } from "@multica/core/issues/config";
-import { PROJECT_STATUS_CONFIG } from "@multica/core/projects/config";
-import type { ProjectStatus } from "@multica/core/types";
 import {
   Dialog,
   DialogContent,
@@ -94,7 +90,6 @@ type NavKey =
   | "inbox"
   | "myIssues"
   | "issues"
-  | "projects"
   | "agents"
   | "runtimes"
   | "skills"
@@ -111,7 +106,6 @@ const navPages: NavPage[] = [
   { key: "inbox", label: "Inbox", icon: Inbox, keywords: ["inbox", "notifications"] },
   { key: "myIssues", label: "My Issues", icon: CircleUser, keywords: ["my", "issues", "assigned"] },
   { key: "issues", label: "Issues", icon: ListTodo, keywords: ["issues", "tasks", "bugs"] },
-  { key: "projects", label: "Projects", icon: FolderKanban, keywords: ["projects", "kanban"] },
   { key: "agents", label: "Agents", icon: Bot, keywords: ["agents", "bots", "ai"] },
   { key: "runtimes", label: "Runtimes", icon: Monitor, keywords: ["runtimes", "environments"] },
   { key: "skills", label: "Skills", icon: BookOpenText, keywords: ["skills", "library"] },
@@ -131,7 +125,6 @@ interface CommandItem {
 
 interface SearchResults {
   issues: SearchIssueResult[];
-  projects: SearchProjectResult[];
 }
 
 export function SearchCommand() {
@@ -159,7 +152,7 @@ export function SearchCommand() {
   );
 
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResults>({ issues: [], projects: [] });
+  const [results, setResults] = useState<SearchResults>({ issues: [] });
   const [isLoading, setIsLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -203,16 +196,6 @@ export function SearchCommand() {
         keywords: ["new", "issue", "create", "add"],
         onSelect: () => {
           useModalStore.getState().open("quick-create-issue");
-          setOpen(false);
-        },
-      },
-      {
-        key: "new-project",
-        label: "New Project",
-        icon: Plus,
-        keywords: ["new", "project", "create", "add"],
-        onSelect: () => {
-          useModalStore.getState().open("create-project");
           setOpen(false);
         },
       },
@@ -315,7 +298,7 @@ export function SearchCommand() {
     );
   }, [workspaces, currentWorkspace?.id, query]);
 
-  const hasResults = results.issues.length > 0 || results.projects.length > 0;
+  const hasResults = results.issues.length > 0;
 
   // Global Cmd+K / Ctrl+K shortcut
   useEffect(() => {
@@ -355,7 +338,7 @@ export function SearchCommand() {
   useEffect(() => {
     if (!open) {
       setQuery("");
-      setResults({ issues: [], projects: [] });
+      setResults({ issues: [] });
       setIsLoading(false);
     }
   }, [open]);
@@ -365,7 +348,7 @@ export function SearchCommand() {
     if (abortRef.current) abortRef.current.abort();
 
     if (!q.trim()) {
-      setResults({ issues: [], projects: [] });
+      setResults({ issues: [] });
       setIsLoading(false);
       return;
     }
@@ -375,24 +358,15 @@ export function SearchCommand() {
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        const [issueRes, projectRes] = await Promise.all([
-          api.searchIssues({
-            q: q.trim(),
-            limit: 20,
-            include_closed: true,
-            signal: controller.signal,
-          }),
-          api.searchProjects({
-            q: q.trim(),
-            limit: 10,
-            include_closed: true,
-            signal: controller.signal,
-          }),
-        ]);
+        const issueRes = await api.searchIssues({
+          q: q.trim(),
+          limit: 20,
+          include_closed: true,
+          signal: controller.signal,
+        });
         if (!controller.signal.aborted) {
           setResults({
             issues: issueRes.issues,
-            projects: projectRes.projects,
           });
           setIsLoading(false);
         }
@@ -415,12 +389,7 @@ export function SearchCommand() {
   const handleSelect = useCallback(
     (value: string) => {
       setOpen(false);
-      if (value.startsWith("project:")) {
-        // value is "project:<id>" — slice off the 8-char prefix to extract the id.
-        push(p.projectDetail(value.slice(8)));
-      } else {
-        push(p.issueDetail(value));
-      }
+      push(p.issueDetail(value));
     },
     [push, setOpen, p],
   );
@@ -451,7 +420,7 @@ export function SearchCommand() {
         <DialogHeader className="sr-only">
           <DialogTitle>Search</DialogTitle>
           <DialogDescription>
-            Search pages, issues, and projects
+            Search pages and issues
           </DialogDescription>
         </DialogHeader>
         <CommandPrimitive
@@ -561,45 +530,6 @@ export function SearchCommand() {
                 </CommandPrimitive.Empty>
               )}
 
-            {!isLoading && results.projects.length > 0 && (
-              <CommandPrimitive.Group
-                heading="Projects"
-                className="p-2 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
-              >
-                {results.projects.map((project) => (
-                  <CommandPrimitive.Item
-                    key={`project:${project.id}`}
-                    value={`project:${project.id}`}
-                    onSelect={handleSelect}
-                    className="flex cursor-default select-none flex-col gap-1 rounded-lg px-3 py-2.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-accent"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <ProjectIcon project={project} size="md" />
-                      <span className="truncate">
-                        <HighlightText text={project.title} query={query} />
-                      </span>
-                      <span
-                        className={`ml-auto text-xs shrink-0 ${PROJECT_STATUS_CONFIG[project.status as ProjectStatus]?.color ?? "text-muted-foreground"}`}
-                      >
-                        {PROJECT_STATUS_CONFIG[project.status as ProjectStatus]?.label ?? project.status}
-                      </span>
-                    </div>
-                    {project.match_source === "description" &&
-                      project.matched_snippet && (
-                        <div className="flex items-start gap-2 pl-[26px]">
-                          <span className="text-xs text-muted-foreground truncate">
-                            <HighlightText
-                              text={project.matched_snippet}
-                              query={query}
-                            />
-                          </span>
-                        </div>
-                      )}
-                  </CommandPrimitive.Item>
-                ))}
-              </CommandPrimitive.Group>
-            )}
-
             {!isLoading && results.issues.length > 0 && (
               <CommandPrimitive.Group
                 heading="Issues"
@@ -679,7 +609,7 @@ export function SearchCommand() {
 
             {!isLoading && !query.trim() && recentIssues.length === 0 && (
               <div className="px-5 py-4 text-center text-xs text-muted-foreground">
-                Type to search issues and projects
+                Type to search issues
               </div>
             )}
           </CommandPrimitive.List>

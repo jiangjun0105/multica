@@ -10,7 +10,6 @@ import { useNavigation } from "@multica/views/navigation";
 import { useCurrentWorkspace, paths } from "@multica/core/paths";
 import type { QuestionnaireAnswers } from "@multica/core/onboarding";
 import { pinKeys } from "@multica/core/pins";
-import { projectKeys } from "@multica/core/projects";
 import { issueKeys } from "@multica/core/issues/queries";
 import {
   memberListOptions,
@@ -106,7 +105,6 @@ export function StarterContentPrompt() {
       // the navigation kicks in, so the next mount refetches.
       await Promise.all([
         qc.invalidateQueries({ queryKey: pinKeys.all(workspace.id, user.id) }),
-        qc.invalidateQueries({ queryKey: projectKeys.all(workspace.id) }),
         qc.invalidateQueries({ queryKey: issueKeys.all(workspace.id) }),
         qc.invalidateQueries({ queryKey: workspaceKeys.agents(workspace.id) }),
       ]);
