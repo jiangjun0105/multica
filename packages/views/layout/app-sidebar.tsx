@@ -18,7 +18,6 @@ import {
   Inbox,
   ListTodo,
   Bot,
-  Monitor,
   ChevronDown,
   ChevronRight,
   Settings,
@@ -28,9 +27,7 @@ import {
   BookOpenText,
   SquarePen,
   CircleUser,
-  FolderKanban,
   X,
-  Zap,
 } from "lucide-react";
 import { WorkspaceAvatar } from "../workspace/workspace-avatar";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
@@ -68,14 +65,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { inboxKeys, deduplicateInboxItems } from "@multica/core/inbox/queries";
 import { api } from "@multica/core/api";
 import { useModalStore } from "@multica/core/modals";
-import { useMyRuntimesNeedUpdate } from "@multica/core/runtimes/hooks";
 import { pinListOptions } from "@multica/core/pins/queries";
 import { useDeletePin, useReorderPins } from "@multica/core/pins/mutations";
 import { issueDetailOptions } from "@multica/core/issues/queries";
-import { projectDetailOptions } from "@multica/core/projects/queries";
 import type { PinnedItem } from "@multica/core/types";
 import { useLogout } from "../auth";
-import { ProjectIcon } from "../projects/components/project-icon";
 
 // Top-level nav items stay active when the user is on a child route
 // (e.g. "Projects" stays lit on /:slug/projects/:id). Pinned items keep
@@ -102,10 +96,7 @@ type NavKey =
   | "inbox"
   | "myIssues"
   | "issues"
-  | "projects"
-  | "autopilots"
   | "agents"
-  | "runtimes"
   | "skills"
   | "settings";
 
@@ -116,13 +107,10 @@ const personalNav: { key: NavKey; label: string; icon: typeof Inbox }[] = [
 
 const workspaceNav: { key: NavKey; label: string; icon: typeof Inbox }[] = [
   { key: "issues", label: "Issues", icon: ListTodo },
-  { key: "projects", label: "Projects", icon: FolderKanban },
-  { key: "autopilots", label: "Autopilot", icon: Zap },
   { key: "agents", label: "Agents", icon: Bot },
 ];
 
 const configureNav: { key: NavKey; label: string; icon: typeof Inbox }[] = [
-  { key: "runtimes", label: "Runtimes", icon: Monitor },
   { key: "skills", label: "Skills", icon: BookOpenText },
   { key: "settings", label: "Settings", icon: Settings },
 ];
@@ -238,48 +226,25 @@ function PinRow({
   onUnpin: () => void;
   wsId: string;
 }) {
-  const isIssue = pin.item_type === "issue";
   const issueQuery = useQuery({
     ...issueDetailOptions(wsId, pin.item_id),
-    enabled: isIssue,
-  });
-  const projectQuery = useQuery({
-    ...projectDetailOptions(wsId, pin.item_id),
-    enabled: !isIssue,
+    enabled: pin.item_type === "issue",
   });
 
-  if (isIssue) {
-    if (issueQuery.isPending) return <PinSkeleton />;
-    if (issueQuery.isError || !issueQuery.data) return null;
-    const issue = issueQuery.data;
-    const label = issue.identifier ? `${issue.identifier} ${issue.title}` : issue.title;
-    const iconNode = (
-      /* Override parent [&_svg]:size-4 — pinned items need smaller icons to match sm size */
-      <StatusIcon status={issue.status} className="!size-3.5 shrink-0" />
-    );
-    return (
-      <SortablePinItem
-        pin={pin}
-        href={href}
-        pathname={pathname}
-        onUnpin={onUnpin}
-        label={label}
-        iconNode={iconNode}
-      />
-    );
-  }
-
-  if (projectQuery.isPending) return <PinSkeleton />;
-  if (projectQuery.isError || !projectQuery.data) return null;
-  const project = projectQuery.data;
-  const iconNode = <ProjectIcon project={project} size="sm" />;
+  if (issueQuery.isPending) return <PinSkeleton />;
+  if (issueQuery.isError || !issueQuery.data) return null;
+  const issue = issueQuery.data;
+  const label = issue.identifier ? `${issue.identifier} ${issue.title}` : issue.title;
+  const iconNode = (
+    <StatusIcon status={issue.status} className="!size-3.5 shrink-0" />
+  );
   return (
     <SortablePinItem
       pin={pin}
       href={href}
       pathname={pathname}
       onUnpin={onUnpin}
-      label={project.title}
+      label={label}
       iconNode={iconNode}
     />
   );
@@ -327,7 +292,6 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
     () => deduplicateInboxItems(inboxItems).filter((i) => !i.read).length,
     [inboxItems],
   );
-  const hasRuntimeUpdates = useMyRuntimesNeedUpdate(wsId);
   const { data: pinnedItems = EMPTY_PINS } = useQuery({
     ...pinListOptions(wsId ?? "", userId ?? ""),
     enabled: !!wsId && !!userId,
@@ -415,11 +379,7 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
       e.preventDefault();
       const lastMode = useCreateModeStore.getState().lastMode;
       if (lastMode === "manual") {
-        // Auto-fill project when on a project detail page (manual form only —
-        // agent mode lets the agent infer project from the prompt).
-        const projectMatch = pathname.match(/^\/[^/]+\/projects\/([^/]+)$/);
-        const data = projectMatch ? { project_id: projectMatch[1] } : undefined;
-        useModalStore.getState().open("create-issue", data);
+        useModalStore.getState().open("create-issue");
       } else {
         useModalStore.getState().open("quick-create-issue");
       }
@@ -623,7 +583,7 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
                             <PinRow
                               key={pin.id}
                               pin={pin}
-                              href={pin.item_type === "issue" ? p.issueDetail(pin.item_id) : p.projectDetail(pin.item_id)}
+                              href={p.issueDetail(pin.item_id)}
                               pathname={pathname}
                               onUnpin={() => deletePin.mutate({ itemType: pin.item_type, itemId: pin.item_id })}
                               wsId={wsId ?? ""}
@@ -678,9 +638,6 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
                       >
                         <item.icon />
                         <span>{item.label}</span>
-                        {item.label === "Runtimes" && hasRuntimeUpdates && (
-                          <span className="ml-auto size-1.5 rounded-full bg-destructive" />
-                        )}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

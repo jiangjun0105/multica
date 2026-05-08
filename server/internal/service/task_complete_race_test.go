@@ -28,7 +28,7 @@ func (r *mockRow) Scan(dest ...any) error {
 		&t.DispatchedAt, &t.StartedAt, &t.CompletedAt, &t.Result,
 		&t.Error, &t.CreatedAt, &t.Context, &t.RuntimeID,
 		&t.SessionID, &t.WorkDir, &t.TriggerCommentID,
-		&t.ChatSessionID, &t.AutopilotRunID,
+		&t.ChatSessionID,
 	}
 	for i, p := range ptrs {
 		if i >= len(dest) {

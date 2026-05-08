@@ -18,10 +18,10 @@ WHERE id = $1 AND workspace_id = $2;
 
 -- name: CreateAgent :one
 INSERT INTO agent (
-    workspace_id, name, description, avatar_url, runtime_mode,
+    workspace_id, name, description, avatar_url,
     runtime_config, runtime_id, visibility, max_concurrent_tasks, owner_id,
     instructions, custom_env, custom_args, mcp_config, model
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 RETURNING *;
 
 -- name: UpdateAgent :one
@@ -30,7 +30,6 @@ UPDATE agent SET
     description = COALESCE(sqlc.narg('description'), description),
     avatar_url = COALESCE(sqlc.narg('avatar_url'), avatar_url),
     runtime_config = COALESCE(sqlc.narg('runtime_config'), runtime_config),
-    runtime_mode = COALESCE(sqlc.narg('runtime_mode'), runtime_mode),
     runtime_id = COALESCE(sqlc.narg('runtime_id'), runtime_id),
     visibility = COALESCE(sqlc.narg('visibility'), visibility),
     status = COALESCE(sqlc.narg('status'), status),
@@ -100,13 +99,13 @@ WHERE id = $1 AND task_id IS NULL;
 -- the conversation when the backend supports it. attempt is incremented;
 -- max_attempts and trigger_comment_id are inherited.
 INSERT INTO task_run (
-    agent_id, runtime_id, task_id, chat_session_id, autopilot_run_id,
+    agent_id, runtime_id, task_id, chat_session_id,
     status, priority, trigger_comment_id, trigger_summary, context,
     session_id, work_dir,
     attempt, max_attempts, parent_task_id
 )
 SELECT
-    p.agent_id, p.runtime_id, p.task_id, p.chat_session_id, p.autopilot_run_id,
+    p.agent_id, p.runtime_id, p.task_id, p.chat_session_id,
     'queued', p.priority, p.trigger_comment_id, p.trigger_summary, p.context,
     p.session_id, p.work_dir,
     p.attempt + 1, p.max_attempts, p.id
@@ -186,10 +185,8 @@ WHERE id = (
               OR (
                 atq.task_id IS NULL
                 AND atq.chat_session_id IS NULL
-                AND atq.autopilot_run_id IS NULL
                 AND active.task_id IS NULL
                 AND active.chat_session_id IS NULL
-                AND active.autopilot_run_id IS NULL
               )
             )
       )

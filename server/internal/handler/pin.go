@@ -84,8 +84,8 @@ func (h *Handler) CreatePin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.ItemType != "issue" && req.ItemType != "project" {
-		writeError(w, http.StatusBadRequest, "item_type must be 'issue' or 'project'")
+	if req.ItemType != "issue" {
+		writeError(w, http.StatusBadRequest, "item_type must be 'issue'")
 		return
 	}
 	if req.ItemID == "" {
@@ -109,13 +109,6 @@ func (h *Handler) CreatePin(w http.ResponseWriter, r *http.Request) {
 			ID: itemUUID, WorkspaceID: wsUUID,
 		}); err != nil {
 			writeError(w, http.StatusNotFound, "issue not found")
-			return
-		}
-	case "project":
-		if _, err := h.Queries.GetProjectInWorkspace(r.Context(), db.GetProjectInWorkspaceParams{
-			ID: itemUUID, WorkspaceID: wsUUID,
-		}); err != nil {
-			writeError(w, http.StatusNotFound, "project not found")
 			return
 		}
 	}

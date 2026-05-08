@@ -68,13 +68,6 @@ const (
 	EventChatDone        = "chat:done"
 	EventChatSessionRead = "chat:session_read"
 
-	// Project events
-	EventProjectCreated         = "project:created"
-	EventProjectUpdated         = "project:updated"
-	EventProjectDeleted         = "project:deleted"
-	EventProjectResourceCreated = "project_resource:created"
-	EventProjectResourceDeleted = "project_resource:deleted"
-
 	// Label events
 	EventLabelCreated       = "label:created"
 	EventLabelUpdated       = "label:updated"
@@ -91,13 +84,6 @@ const (
 	EventInvitationAccepted = "invitation:accepted"
 	EventInvitationDeclined = "invitation:declined"
 	EventInvitationRevoked  = "invitation:revoked"
-
-	// Autopilot events
-	EventAutopilotCreated  = "autopilot:created"
-	EventAutopilotUpdated  = "autopilot:updated"
-	EventAutopilotDeleted  = "autopilot:deleted"
-	EventAutopilotRunStart = "autopilot:run_start"
-	EventAutopilotRunDone  = "autopilot:run_done"
 
 	// Daemon events
 	EventDaemonHeartbeat     = "daemon:heartbeat"

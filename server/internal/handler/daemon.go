@@ -282,7 +282,6 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 			WorkspaceID: wsUUID,
 			DaemonID:    strToText(req.DaemonID),
 			Name:        name,
-			RuntimeMode: "local",
 			Provider:    provider,
 			Status:      status,
 			DeviceInfo:  deviceInfo,
@@ -299,7 +298,6 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 			WorkspaceID:    row.WorkspaceID,
 			DaemonID:       row.DaemonID,
 			Name:           row.Name,
-			RuntimeMode:    row.RuntimeMode,
 			Provider:       row.Provider,
 			Status:         row.Status,
 			DeviceInfo:     row.DeviceInfo,
@@ -527,14 +525,14 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	authPath := middleware.DaemonAuthPathFromContext(r.Context())
 	var (
-		outcome                                                                                            = "unauth"
-		runtimeID                                                                                          string
-		decodeMs, runtimeLookupMs, workspaceCheckMs                                                        int64
-		authMs, updateMs, probeModelMs, popModelMs, probeSkillsMs, popSkillsMs, probeImportMs, popImportMs int64
-		probeModelTimedOut, probeSkillsTimedOut, probeImportTimedOut                                       bool
+		outcome                                     = "unauth"
+		runtimeID                                    string
+		decodeMs, runtimeLookupMs, workspaceCheckMs int64
+		authMs, updateMs, probeModelMs, popModelMs  int64
+		probeModelTimedOut                          bool
 	)
 	defer func() {
-		logHeartbeatEndpointSlow(runtimeID, outcome, authPath, start, decodeMs, runtimeLookupMs, workspaceCheckMs, authMs, updateMs, probeModelMs, popModelMs, probeSkillsMs, popSkillsMs, probeImportMs, popImportMs, probeModelTimedOut, probeSkillsTimedOut, probeImportTimedOut)
+		logHeartbeatEndpointSlow(runtimeID, outcome, authPath, start, decodeMs, runtimeLookupMs, workspaceCheckMs, authMs, updateMs, probeModelMs, popModelMs, probeModelTimedOut)
 	}()
 
 	decodeStart := time.Now()
@@ -586,13 +584,7 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	updateMs = m.UpdateMs
 	probeModelMs = m.ProbeModelMs
 	popModelMs = m.PopModelMs
-	probeSkillsMs = m.ProbeSkillsMs
-	popSkillsMs = m.PopSkillsMs
-	probeImportMs = m.ProbeImportMs
-	popImportMs = m.PopImportMs
 	probeModelTimedOut = m.ProbeModelTimedOut
-	probeSkillsTimedOut = m.ProbeSkillsTimedOut
-	probeImportTimedOut = m.ProbeImportTimedOut
 	if err != nil {
 		outcome = "error_update"
 		writeError(w, http.StatusInternalServerError, "heartbeat failed")
@@ -609,12 +601,6 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	if ack.PendingModelList != nil {
 		resp["pending_model_list"] = ack.PendingModelList
-	}
-	if ack.PendingLocalSkills != nil {
-		resp["pending_local_skills"] = ack.PendingLocalSkills
-	}
-	if ack.PendingLocalSkillImport != nil {
-		resp["pending_local_skill_import"] = ack.PendingLocalSkillImport
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -645,8 +631,8 @@ func (h *Handler) HandleDaemonWSHeartbeat(ctx context.Context, identity daemonws
 // heartbeatMetrics carries per-stage timings out of processHeartbeat so the
 // HTTP slow-log can stay structured. The WS path discards them.
 type heartbeatMetrics struct {
-	UpdateMs, ProbeModelMs, PopModelMs, ProbeSkillsMs, PopSkillsMs, ProbeImportMs, PopImportMs int64
-	ProbeModelTimedOut, ProbeSkillsTimedOut, ProbeImportTimedOut                               bool
+	UpdateMs, ProbeModelMs, PopModelMs int64
+	ProbeModelTimedOut                 bool
 }
 
 // processHeartbeat does the work shared by HTTP POST /api/daemon/heartbeat and
@@ -706,61 +692,6 @@ func (h *Handler) processHeartbeat(ctx context.Context, rt db.AgentRuntime) (*pr
 		}
 	}
 
-	// Probe then claim the local-skill list queue. The probe is bounded so a
-	// slow shared store cannot stall the heartbeat on empty-queue ticks; the
-	// claim runs unbounded (it inherits only ctx) because its Lua side
-	// effects cannot be safely aborted mid-script.
-	probeSkillsStart := time.Now()
-	probeSkillsCtx, cancelProbeSkills := context.WithTimeout(ctx, heartbeatHasPendingTimeout)
-	hasSkills, probeErr := h.LocalSkillListStore.HasPending(probeSkillsCtx, runtimeID)
-	cancelProbeSkills()
-	m.ProbeSkillsMs = time.Since(probeSkillsStart).Milliseconds()
-	switch {
-	case probeErr == nil && hasSkills:
-		popStart := time.Now()
-		pendingSkills, popErr := h.LocalSkillListStore.PopPending(ctx, runtimeID)
-		m.PopSkillsMs = time.Since(popStart).Milliseconds()
-		if popErr != nil {
-			slog.Warn("local skill list PopPending failed", "error", popErr, "runtime_id", runtimeID)
-		} else if pendingSkills != nil {
-			ack.PendingLocalSkills = &protocol.DaemonHeartbeatPendingLocalSkills{ID: pendingSkills.ID}
-		}
-	case probeErr != nil:
-		if errors.Is(probeErr, context.DeadlineExceeded) || errors.Is(probeErr, context.Canceled) {
-			m.ProbeSkillsTimedOut = true
-			slog.Warn("local skill list HasPending timed out", "runtime_id", runtimeID, "elapsed_ms", m.ProbeSkillsMs)
-		} else {
-			slog.Warn("local skill list HasPending failed", "error", probeErr, "runtime_id", runtimeID)
-		}
-	}
-
-	probeImportStart := time.Now()
-	probeImportCtx, cancelProbeImport := context.WithTimeout(ctx, heartbeatHasPendingTimeout)
-	hasImport, probeErr := h.LocalSkillImportStore.HasPending(probeImportCtx, runtimeID)
-	cancelProbeImport()
-	m.ProbeImportMs = time.Since(probeImportStart).Milliseconds()
-	switch {
-	case probeErr == nil && hasImport:
-		popStart := time.Now()
-		pendingImport, popErr := h.LocalSkillImportStore.PopPending(ctx, runtimeID)
-		m.PopImportMs = time.Since(popStart).Milliseconds()
-		if popErr != nil {
-			slog.Warn("local skill import PopPending failed", "error", popErr, "runtime_id", runtimeID)
-		} else if pendingImport != nil {
-			ack.PendingLocalSkillImport = &protocol.DaemonHeartbeatPendingLocalSkillImport{
-				ID:       pendingImport.ID,
-				SkillKey: pendingImport.SkillKey,
-			}
-		}
-	case probeErr != nil:
-		if errors.Is(probeErr, context.DeadlineExceeded) || errors.Is(probeErr, context.Canceled) {
-			m.ProbeImportTimedOut = true
-			slog.Warn("local skill import HasPending timed out", "runtime_id", runtimeID, "elapsed_ms", m.ProbeImportMs)
-		} else {
-			slog.Warn("local skill import HasPending failed", "error", probeErr, "runtime_id", runtimeID)
-		}
-	}
-
 	return ack, m, nil
 }
 
@@ -770,9 +701,9 @@ func (h *Handler) processHeartbeat(ctx context.Context, rt db.AgentRuntime) (*pr
 // auth_ms is further decomposed into decode_ms, runtime_lookup_ms, and
 // workspace_check_ms; auth_path labels which token kind authenticated the
 // request ("daemon_token", "pat", or "jwt"). Mirrors logClaimEndpointSlow.
-func logHeartbeatEndpointSlow(runtimeID, outcome, authPath string, start time.Time, decodeMs, runtimeLookupMs, workspaceCheckMs, authMs, updateMs, probeModelMs, popModelMs, probeSkillsMs, popSkillsMs, probeImportMs, popImportMs int64, probeModelTimedOut, probeSkillsTimedOut, probeImportTimedOut bool) {
+func logHeartbeatEndpointSlow(runtimeID, outcome, authPath string, start time.Time, decodeMs, runtimeLookupMs, workspaceCheckMs, authMs, updateMs, probeModelMs, popModelMs int64, probeModelTimedOut bool) {
 	totalMs := time.Since(start).Milliseconds()
-	if totalMs < 500 && !probeModelTimedOut && !probeSkillsTimedOut && !probeImportTimedOut {
+	if totalMs < 500 && !probeModelTimedOut {
 		return
 	}
 	slog.Info("heartbeat_endpoint slow",
@@ -787,13 +718,7 @@ func logHeartbeatEndpointSlow(runtimeID, outcome, authPath string, start time.Ti
 		"update_ms", updateMs,
 		"probe_model_ms", probeModelMs,
 		"pop_model_ms", popModelMs,
-		"probe_skills_ms", probeSkillsMs,
-		"pop_skills_ms", popSkillsMs,
-		"probe_import_ms", probeImportMs,
-		"pop_import_ms", popImportMs,
 		"probe_model_timed_out", probeModelTimedOut,
-		"probe_skills_timed_out", probeSkillsTimedOut,
-		"probe_import_timed_out", probeImportTimedOut,
 	)
 }
 
@@ -910,48 +835,7 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		if issue, err := h.Queries.GetIssue(r.Context(), task.TaskID); err == nil {
 			resp.WorkspaceID = uuidToString(issue.WorkspaceID)
 
-			var projectRepos []RepoData
-			if issue.ProjectID.Valid {
-				resp.ProjectID = uuidToString(issue.ProjectID)
-				if proj, err := h.Queries.GetProject(r.Context(), issue.ProjectID); err == nil {
-					resp.ProjectTitle = proj.Title
-				}
-				if rows := h.listProjectResourcesForProject(r.Context(), issue.ProjectID); len(rows) > 0 {
-					out := make([]ProjectResourceData, 0, len(rows))
-					for _, row := range rows {
-						label := ""
-						if row.Label.Valid {
-							label = row.Label.String
-						}
-						ref := json.RawMessage(row.ResourceRef)
-						if len(ref) == 0 {
-							ref = json.RawMessage("{}")
-						}
-						out = append(out, ProjectResourceData{
-							ID:           uuidToString(row.ID),
-							ResourceType: row.ResourceType,
-							ResourceRef:  ref,
-							Label:        label,
-						})
-						// Lift github_repo resources into the daemon's repo list
-						// so `multica repo checkout` and the meta-skill render
-						// them as the issue's repos.
-						if row.ResourceType == "github_repo" {
-							var payload struct {
-								URL string `json:"url"`
-							}
-							if json.Unmarshal(row.ResourceRef, &payload) == nil && payload.URL != "" {
-								projectRepos = append(projectRepos, RepoData{URL: payload.URL})
-							}
-						}
-					}
-					resp.ProjectResources = out
-				}
-			}
-
-			if len(projectRepos) > 0 {
-				resp.Repos = projectRepos
-			} else if ws, err := h.Queries.GetWorkspace(r.Context(), issue.WorkspaceID); err == nil && ws.Repos != nil {
+				if ws, err := h.Queries.GetWorkspace(r.Context(), issue.WorkspaceID); err == nil && ws.Repos != nil {
 				var repos []RepoData
 				if json.Unmarshal(ws.Repos, &repos) == nil && len(repos) > 0 {
 					resp.Repos = repos
@@ -1056,41 +940,11 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Autopilot run_only task: resolve workspace from autopilot_run →
-	// autopilot, and include the autopilot instructions because there is no
-	// issue for the agent to fetch.
-	if task.AutopilotRunID.Valid {
-		if run, err := h.Queries.GetAutopilotRun(r.Context(), task.AutopilotRunID); err == nil {
-			resp.AutopilotID = uuidToString(run.AutopilotID)
-			resp.AutopilotSource = run.Source
-			if run.TriggerPayload != nil {
-				resp.AutopilotTriggerPayload = json.RawMessage(run.TriggerPayload)
-			}
-			if ap, err := h.Queries.GetAutopilot(r.Context(), run.AutopilotID); err == nil {
-				resp.AutopilotTitle = ap.Title
-				if ap.Description.Valid {
-					resp.AutopilotDescription = ap.Description.String
-				}
-				if resp.WorkspaceID == "" {
-					resp.WorkspaceID = uuidToString(ap.WorkspaceID)
-				}
-				if len(resp.Repos) == 0 {
-					if ws, err := h.Queries.GetWorkspace(r.Context(), ap.WorkspaceID); err == nil && ws.Repos != nil {
-						var repos []RepoData
-						if json.Unmarshal(ws.Repos, &repos) == nil && len(repos) > 0 {
-							resp.Repos = repos
-						}
-					}
-				}
-			}
-		}
-	}
-
 	// Quick-create task: no issue / chat / autopilot link — workspace and
 	// prompt come from the task's context JSONB. Resolve workspace from
 	// there so the isolation check below has something to compare.
 	hasQuickCreate := false
-	if task.Context != nil && !task.TaskID.Valid && !task.ChatSessionID.Valid && !task.AutopilotRunID.Valid {
+	if task.Context != nil && !task.TaskID.Valid && !task.ChatSessionID.Valid {
 		var qc service.QuickCreateContext
 		if json.Unmarshal(task.Context, &qc) == nil && qc.Type == service.QuickCreateContextType {
 			hasQuickCreate = true
@@ -1122,8 +976,7 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 			"resolved_workspace", resp.WorkspaceID,
 			"has_issue", task.TaskID.Valid,
 			"has_chat", task.ChatSessionID.Valid,
-			"has_autopilot_run", task.AutopilotRunID.Valid,
-			"has_quick_create", hasQuickCreate,
+						"has_quick_create", hasQuickCreate,
 		)
 		if _, cerr := h.TaskService.CancelTask(r.Context(), task.ID); cerr != nil {
 			slog.Error("task claim: cancel after workspace check failed",

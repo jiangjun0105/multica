@@ -311,12 +311,6 @@ type welcomeIssueTemplate struct {
 type importStarterContentRequest struct {
 	WorkspaceID string `json:"workspace_id"`
 
-	Project struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		Icon        string `json:"icon"`
-	} `json:"project"`
-
 	// Welcome issue template — rendered regardless of branch. The
 	// server creates it only when at least one agent exists in the
 	// workspace; otherwise it's ignored.
@@ -333,7 +327,6 @@ type importStarterContentRequest struct {
 
 type importStarterContentResponse struct {
 	User           UserResponse `json:"user"`
-	ProjectID      string       `json:"project_id"`
 	WelcomeIssueID *string      `json:"welcome_issue_id"`
 }
 
@@ -365,11 +358,6 @@ func (h *Handler) ImportStarterContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.WorkspaceID = uuidToString(wsUUID)
-	if req.Project.Title == "" {
-		writeError(w, http.StatusBadRequest, "project.title is required")
-		return
-	}
-
 	// Start the transaction early — the state claim lives inside it so
 	// concurrent imports from another tab can't both pass the check.
 	tx, err := h.TxStarter.Begin(r.Context())
@@ -430,21 +418,6 @@ func (h *Handler) ImportStarterContent(w http.ResponseWriter, r *http.Request) {
 	subSpecs := req.SelfServeSubIssues
 	if hasAgent {
 		subSpecs = req.AgentGuidedSubIssues
-	}
-
-	// --- Create project ---
-	project, err := qtx.CreateProject(r.Context(), db.CreateProjectParams{
-		WorkspaceID: wsUUID,
-		Title:       req.Project.Title,
-		Description: strOrNullText(req.Project.Description),
-		Icon:        strOrNullText(req.Project.Icon),
-		Status:      "planned",
-		Priority:    "none",
-	})
-	if err != nil {
-		slog.Warn("import starter content: create project failed", append(logger.RequestAttrs(r), "error", err)...)
-		writeError(w, http.StatusInternalServerError, "failed to create project")
-		return
 	}
 
 	// --- Create welcome issue (only when an agent exists) ---
@@ -519,7 +492,6 @@ func (h *Handler) ImportStarterContent(w http.ResponseWriter, r *http.Request) {
 			CreatorType:  "member",
 			CreatorID:    actorID,
 			Number:       number,
-			ProjectID:    project.ID,
 		})
 		if err != nil {
 			slog.Warn("import starter content: create sub-issue failed", append(logger.RequestAttrs(r), "error", err, "title", sub.Title)...)
@@ -534,20 +506,6 @@ func (h *Handler) ImportStarterContent(w http.ResponseWriter, r *http.Request) {
 	// from landing. We warn and move on. Pointers to the created rows
 	// are kept around for post-commit `pin:created` fan-out so the
 	// sidebar refreshes without a manual reload.
-	pinnedProjectPos := float64(1)
-	var pinProjectForEvent *db.PinnedItem
-	pinProject, err := qtx.CreatePinnedItem(r.Context(), db.CreatePinnedItemParams{
-		WorkspaceID: wsUUID,
-		UserID:      parseUUID(userID),
-		ItemType:    "project",
-		ItemID:      project.ID,
-		Position:    pinnedProjectPos,
-	})
-	if err != nil {
-		slog.Warn("import starter content: pin project failed", append(logger.RequestAttrs(r), "error", err)...)
-	} else {
-		pinProjectForEvent = &pinProject
-	}
 	var pinWelcomeIssueForEvent *db.PinnedItem
 	if welcomeIssueForEvent != nil {
 		pinWelcome, err := qtx.CreatePinnedItem(r.Context(), db.CreatePinnedItemParams{
@@ -555,7 +513,7 @@ func (h *Handler) ImportStarterContent(w http.ResponseWriter, r *http.Request) {
 			UserID:      parseUUID(userID),
 			ItemType:    "issue",
 			ItemID:      welcomeIssueForEvent.ID,
-			Position:    pinnedProjectPos + 1,
+			Position:    1,
 		})
 		if err != nil {
 			slog.Warn("import starter content: pin welcome issue failed", append(logger.RequestAttrs(r), "error", err)...)
@@ -583,9 +541,6 @@ func (h *Handler) ImportStarterContent(w http.ResponseWriter, r *http.Request) {
 	// Realtime fan-out happens here (not inside the tx) because the DB
 	// commit must land first — otherwise subscribers could receive an
 	// event for state that's about to be rolled back.
-	projectResp := projectToResponse(project)
-	h.publish(protocol.EventProjectCreated, req.WorkspaceID, "member", userID, map[string]any{"project": projectResp})
-
 	workspacePrefix := h.getIssuePrefix(r.Context(), wsUUID)
 	if welcomeIssueForEvent != nil {
 		welcomeResp := issueToResponse(*welcomeIssueForEvent, workspacePrefix)
@@ -601,9 +556,6 @@ func (h *Handler) ImportStarterContent(w http.ResponseWriter, r *http.Request) {
 	// Pin events. Without these, the sidebar's `pinListOptions` query
 	// stays cached on the pre-import snapshot — only a hard refresh
 	// surfaces the new pins. Same payload shape as `POST /pins`.
-	if pinProjectForEvent != nil {
-		h.publish(protocol.EventPinCreated, req.WorkspaceID, "member", userID, map[string]any{"pin": pinnedItemToResponse(*pinProjectForEvent)})
-	}
 	if pinWelcomeIssueForEvent != nil {
 		h.publish(protocol.EventPinCreated, req.WorkspaceID, "member", userID, map[string]any{"pin": pinnedItemToResponse(*pinWelcomeIssueForEvent)})
 	}
@@ -616,7 +568,6 @@ func (h *Handler) ImportStarterContent(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, importStarterContentResponse{
 		User:           userToResponse(updatedUser),
-		ProjectID:      uuidToString(project.ID),
 		WelcomeIssueID: welcomeIssueID,
 	})
 }

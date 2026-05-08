@@ -181,12 +181,11 @@ describe("SearchCommand", () => {
     expect(screen.queryByText("Pages")).not.toBeInTheDocument();
     expect(screen.queryByText("Switch Workspace")).not.toBeInTheDocument();
     // Only the primary creation action surfaces on empty query; everything
-    // else (theme, copy, New Project) must be revealed by typing.
+    // else (theme, copy) must be revealed by typing.
     expect(screen.getByText("Commands")).toBeInTheDocument();
     expect(
       screen.getByText((_, el) => el?.textContent === "New Issue" && el?.tagName === "SPAN"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("New Project")).not.toBeInTheDocument();
     expect(screen.queryByText("Switch to Light Theme")).not.toBeInTheDocument();
     expect(screen.queryByText("Switch to Dark Theme")).not.toBeInTheDocument();
     expect(screen.queryByText("Use System Theme")).not.toBeInTheDocument();
@@ -239,7 +238,7 @@ describe("SearchCommand", () => {
     expect(screen.getByText("MUL-2")).toBeInTheDocument();
   });
 
-  it("shows New Issue / New Project under Commands and triggers the modal store", async () => {
+  it("shows New Issue under Commands and triggers the modal store", async () => {
     const user = userEvent.setup();
     render(<SearchCommand />);
 
@@ -250,9 +249,6 @@ describe("SearchCommand", () => {
       expect(screen.getByText("Commands")).toBeInTheDocument();
       expect(
         screen.getByText((_, el) => el?.textContent === "New Issue" && el?.tagName === "SPAN"),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText((_, el) => el?.textContent === "New Project" && el?.tagName === "SPAN"),
       ).toBeInTheDocument();
     });
 
@@ -267,7 +263,7 @@ describe("SearchCommand", () => {
 
   it("hides copy-link commands when not on an issue detail route", async () => {
     const user = userEvent.setup();
-    mockPathname.current = "/ws-test/projects";
+    mockPathname.current = "/ws-test/agents";
     render(<SearchCommand />);
 
     const input = screen.getByPlaceholderText("Type a command or search...");

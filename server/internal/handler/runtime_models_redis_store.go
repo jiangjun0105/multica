@@ -10,11 +10,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Redis-backed implementation of ModelListStore. The wire layout matches
-// runtime_local_skills_redis_store.go (which solves the same multi-node
-// dispatch problem for skill lists/imports) so the operational story is
-// identical: namespaced keys, ZSET-backed pending queue, atomic claim via
-// the shared Lua script.
+// Redis-backed implementation of ModelListStore. Namespaced keys,
+// ZSET-backed pending queue, atomic claim via Lua script.
 //
 // Key layout:
 //
@@ -22,11 +19,17 @@ import (
 //   mul:model_list:pending:<runtime_id>       → ZSET { member = request_id, score = created_at UnixNano }
 //                                                TTL = retention*2 (kept alive long enough for
 //                                                lazy sweep on PopPending)
-//
-// PopPending uses claimPendingScript (defined in
-// runtime_local_skills_redis_store.go) to atomically ZREM the pending entry
-// and SET the record to "running" — splitting those two writes would strand
-// requests on a transient Redis hiccup between them.
+
+// claimPendingScript atomically removes a request from the pending ZSET and
+// marks it running. Either both writes happen or neither does.
+var claimPendingScript = redis.NewScript(`
+local removed = redis.call('ZREM', KEYS[1], ARGV[1])
+if removed == 0 then
+    return 0
+end
+redis.call('SET', KEYS[2], ARGV[2], 'EX', tonumber(ARGV[3]))
+return 1
+`)
 
 const (
 	// Namespaced under mul:model_list:* so the key set doesn't collide with

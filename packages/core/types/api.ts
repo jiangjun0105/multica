@@ -1,6 +1,5 @@
 import type { Issue, IssueStatus, IssuePriority, IssueAssigneeType } from "./issue";
 import type { MemberRole } from "./workspace";
-import type { Project } from "./project";
 
 // Issue API
 export interface CreateIssueRequest {
@@ -70,16 +69,6 @@ export interface SearchIssueResult extends Issue {
 
 export interface SearchIssuesResponse {
   issues: SearchIssueResult[];
-  total: number;
-}
-
-export interface SearchProjectResult extends Project {
-  match_source: "title" | "description";
-  matched_snippet?: string;
-}
-
-export interface SearchProjectsResponse {
-  projects: SearchProjectResult[];
   total: number;
 }
 

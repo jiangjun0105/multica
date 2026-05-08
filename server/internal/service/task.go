@@ -22,6 +22,11 @@ import (
 	"github.com/multica-ai/multica/server/pkg/redact"
 )
 
+// TxStarter abstracts transaction creation (satisfied by pgxpool.Pool).
+type TxStarter interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 type TaskService struct {
 	Queries   *db.Queries
 	TxStarter TxStarter
@@ -905,10 +910,6 @@ func (s *TaskService) MaybeRetryFailedTask(ctx context.Context, parent db.TaskRu
 		)
 		return nil, nil
 	}
-	if parent.AutopilotRunID.Valid {
-		// Autopilot has its own retry semantics; do not double-trigger.
-		return nil, nil
-	}
 	if !parent.TaskID.Valid && !parent.ChatSessionID.Valid {
 		return nil, nil
 	}
@@ -1317,13 +1318,6 @@ func (s *TaskService) ResolveTaskWorkspaceID(ctx context.Context, task db.TaskRu
 			return util.UUIDToString(cs.WorkspaceID)
 		}
 	}
-	if task.AutopilotRunID.Valid {
-		if run, err := s.Queries.GetAutopilotRun(ctx, task.AutopilotRunID); err == nil {
-			if ap, err := s.Queries.GetAutopilot(ctx, run.AutopilotID); err == nil {
-				return util.UUIDToString(ap.WorkspaceID)
-			}
-		}
-	}
 	// Quick-create tasks have no issue / chat / autopilot link — workspace
 	// lives in the context JSONB. Returning "" here is what blocked
 	// requireDaemonTaskAccess (404 on /start, /progress, /complete, /fail
@@ -1452,7 +1446,7 @@ func issueToMap(issue db.Issue, issuePrefix string) map[string]any {
 // autopilot are never quick-create even if they happen to carry a
 // context blob, so those are filtered up front.
 func (s *TaskService) parseQuickCreateContext(task db.TaskRun) (QuickCreateContext, bool) {
-	if task.TaskID.Valid || task.ChatSessionID.Valid || task.AutopilotRunID.Valid {
+	if task.TaskID.Valid || task.ChatSessionID.Valid {
 		return QuickCreateContext{}, false
 	}
 	if len(task.Context) == 0 {
@@ -1666,7 +1660,6 @@ func agentToMap(a db.Agent) map[string]any {
 		"name":                 a.Name,
 		"description":          a.Description,
 		"avatar_url":           util.TextToPtr(a.AvatarUrl),
-		"runtime_mode":         a.RuntimeMode,
 		"runtime_config":       rc,
 		"visibility":           a.Visibility,
 		"status":               a.Status,

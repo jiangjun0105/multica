@@ -6,7 +6,6 @@ import type { ContextAnchor } from "@multica/core/chat";
 import { useChatStore } from "@multica/core/chat";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { issueDetailOptions } from "@multica/core/issues/queries";
-import { projectDetailOptions } from "@multica/core/projects/queries";
 import { inboxListOptions } from "@multica/core/inbox/queries";
 import { Button } from "@multica/ui/components/ui/button";
 import {
@@ -15,7 +14,6 @@ import {
   TooltipContent,
 } from "@multica/ui/components/ui/tooltip";
 import { IssueChip } from "../../issues/components/issue-chip";
-import { ProjectChip } from "../../projects/components/project-chip";
 import { AppLink, useNavigation } from "../../navigation";
 import { useWorkspacePaths } from "@multica/core/paths";
 
@@ -30,7 +28,7 @@ export function buildAnchorMarkdown(anchor: ContextAnchor): string {
     const base = `Context: [${anchor.label}](mention://issue/${anchor.id})`;
     return anchor.subtitle ? `${base} — "${anchor.subtitle}"` : base;
   }
-  return `Context: Project "${anchor.label}"`;
+  return `Context: "${anchor.label}"`;
 }
 
 /**
@@ -48,13 +46,9 @@ export function useRouteAnchorCandidate(wsId: string): {
   const { pathname, searchParams } = useNavigation();
 
   const issueMatch = pathname.match(/^\/[^/]+\/issues\/([^/]+)$/);
-  const projectMatch = pathname.match(/^\/[^/]+\/projects\/([^/]+)$/);
   const isInbox = /^\/[^/]+\/inbox$/.test(pathname);
 
   const routeIssueId = issueMatch ? decodeURIComponent(issueMatch[1]!) : null;
-  const routeProjectId = projectMatch
-    ? decodeURIComponent(projectMatch[1]!)
-    : null;
 
   // Inbox: the anchor is the issue behind the currently selected notification.
   const { data: inboxItems = [] } = useQuery({
@@ -75,11 +69,6 @@ export function useRouteAnchorCandidate(wsId: string): {
     enabled: !!issueIdToFetch,
   });
 
-  const { data: project, isLoading: projectLoading } = useQuery({
-    ...projectDetailOptions(wsId, routeProjectId ?? ""),
-    enabled: !!routeProjectId,
-  });
-
   if (issueIdToFetch) {
     if (!issue) return { candidate: null, isResolving: issueLoading };
     return {
@@ -88,18 +77,6 @@ export function useRouteAnchorCandidate(wsId: string): {
         id: issue.id,
         label: issue.identifier,
         subtitle: issue.title,
-      },
-      isResolving: false,
-    };
-  }
-
-  if (routeProjectId) {
-    if (!project) return { candidate: null, isResolving: projectLoading };
-    return {
-      candidate: {
-        type: "project",
-        id: project.id,
-        label: project.title,
       },
       isResolving: false,
     };
@@ -130,9 +107,7 @@ export function ContextAnchorButton() {
   const tooltipText = isDisabled
     ? "Nothing to share with Multica on this page"
     : focusMode && candidate
-      ? candidate.type === "issue"
-        ? `Multica knows you're viewing ${candidate.label} · Click to turn off`
-        : `Multica knows you're viewing project "${candidate.label}" · Click to turn off`
+      ? `Multica knows you're viewing ${candidate.label} · Click to turn off`
       : "Let Multica know what you're viewing";
 
   return (
@@ -172,15 +147,9 @@ export function ContextAnchorCard() {
 
   if (!focusMode || !candidate) return null;
 
-  const href =
-    candidate.type === "issue"
-      ? paths.issueDetail(candidate.id)
-      : paths.projectDetail(candidate.id);
+  const href = paths.issueDetail(candidate.id);
 
-  const tooltipText =
-    candidate.type === "issue"
-      ? `Multica knows you're viewing ${candidate.label}${candidate.subtitle ? ` — ${candidate.subtitle}` : ""}`
-      : `Multica knows you're viewing project "${candidate.label}"`;
+  const tooltipText = `Multica knows you're viewing ${candidate.label}${candidate.subtitle ? ` — ${candidate.subtitle}` : ""}`;
 
   // Same pattern as IssueMentionCard: wrap the pure chip in an AppLink and
   // layer cursor + hover affordance onto the chip. Makes the anchor feel
@@ -192,19 +161,11 @@ export function ContextAnchorCard() {
         <TooltipTrigger
           render={
             <AppLink href={href} className="inline-flex">
-              {candidate.type === "issue" ? (
-                <IssueChip
-                  issueId={candidate.id}
-                  fallbackLabel={candidate.label}
-                  className="cursor-pointer hover:bg-accent transition-colors"
-                />
-              ) : (
-                <ProjectChip
-                  projectId={candidate.id}
-                  fallbackLabel={candidate.label}
-                  className="cursor-pointer hover:bg-accent transition-colors"
-                />
-              )}
+              <IssueChip
+                issueId={candidate.id}
+                fallbackLabel={candidate.label}
+                className="cursor-pointer hover:bg-accent transition-colors"
+              />
             </AppLink>
           }
         />

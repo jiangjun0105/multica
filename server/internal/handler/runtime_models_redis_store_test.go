@@ -2,14 +2,38 @@ package handler
 
 import (
 	"context"
+	"os"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
-// Reuses the newRedisTestClient helper from
-// runtime_local_skills_redis_store_test.go: same Redis instance, same gating
-// on REDIS_TEST_URL, same FlushDB-per-test isolation.
+func newRedisTestClient(t *testing.T) *redis.Client {
+	t.Helper()
+	url := os.Getenv("REDIS_TEST_URL")
+	if url == "" {
+		t.Skip("REDIS_TEST_URL not set")
+	}
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		t.Fatalf("parse REDIS_TEST_URL: %v", err)
+	}
+	rdb := redis.NewClient(opts)
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		t.Skipf("REDIS_TEST_URL unreachable: %v", err)
+	}
+	if err := rdb.FlushDB(ctx).Err(); err != nil {
+		t.Fatalf("flushdb: %v", err)
+	}
+	t.Cleanup(func() {
+		rdb.FlushDB(context.Background())
+		rdb.Close()
+	})
+	return rdb
+}
 
 // TestRedisModelListStore_EnvelopePersistsRunStartedAt is a pure marshal/
 // unmarshal round-trip — no Redis required. Pins the regression that the

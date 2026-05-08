@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ChevronRight,
   Download,
-  HardDrive,
   Loader2,
   Pencil,
   Plus,
@@ -38,9 +37,8 @@ import { Textarea } from "@multica/ui/components/ui/textarea";
 import { useScrollFade } from "@multica/ui/hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";
 import { openExternal } from "../../platform";
-import { RuntimeLocalSkillImportPanel } from "./runtime-local-skill-import-panel";
 
-type Method = "chooser" | "manual" | "url" | "runtime";
+type Method = "chooser" | "manual" | "url";
 
 /** After create/import, seed the detail cache with the freshly-returned skill
  *  so the next navigation renders immediately — no extra round-trip. Also
@@ -83,12 +81,6 @@ function MethodChooser({ onChoose }: { onChoose: (m: Method) => void }) {
       icon: Download,
       title: "Import from URL",
       desc: "Pull a published skill from ClawHub or Skills.sh.",
-    },
-    {
-      key: "runtime",
-      icon: HardDrive,
-      title: "Copy from runtime",
-      desc: "Promote a skill already installed on your local runtime.",
     },
   ];
   return (
@@ -440,15 +432,12 @@ const METHOD_TITLES: Record<Method, string> = {
   chooser: "New skill",
   manual: "Create manually",
   url: "Import from URL",
-  runtime: "Copy from runtime",
 };
 
 const METHOD_DESCS: Record<Method, string> = {
   chooser: "Choose how you want to add a skill to this workspace.",
   manual: "Write a new SKILL.md from scratch.",
   url: "Fetch a published skill by URL. Files are pulled server-side.",
-  runtime:
-    "Scan a local runtime and promote one of its on-disk skills into this workspace.",
 };
 
 export function CreateSkillDialog({
@@ -465,8 +454,6 @@ export function CreateSkillDialog({
     onClose();
   };
 
-  const wide = method === "runtime";
-
   // Mount pattern mirrors CreateIssue / CreateProject: the parent conditionally
   // renders this component and `<Dialog open>` is hard-coded. Toggling `open`
   // via prop (controlled) causes a second data-open → data-closed flip with a
@@ -481,12 +468,7 @@ export function CreateSkillDialog({
           // dimensions — matches the CreateIssue modal's ease curve so the
           // expand feels native rather than snapping.
           "!transition-all !duration-300 !ease-out",
-          wide
-            ? // `min(600px, 85vh)` keeps the dialog from overflowing short
-              // viewports (smaller laptops) while still feeling generous on
-              // normal screens.
-              "!h-[min(600px,85vh)] !max-w-2xl !w-full"
-            : "!h-auto !max-h-[85vh] !max-w-md !w-full",
+          "!h-auto !max-h-[85vh] !max-w-md !w-full",
         )}
       >
         {/* Header */}
@@ -548,9 +530,6 @@ export function CreateSkillDialog({
             onCreated={handleCreated}
             onCancel={() => setMethod("chooser")}
           />
-        )}
-        {method === "runtime" && (
-          <RuntimeLocalSkillImportPanel onImported={handleCreated} />
         )}
       </DialogContent>
     </Dialog>
