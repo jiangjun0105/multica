@@ -1760,3 +1760,259 @@ func TestClaimTask_ChatLegacyNullRuntimeFallsBackToTaskRow(t *testing.T) {
 		t.Fatalf("legacy fallback: expected PriorWorkDir='/tmp/legacy-fallback-workdir', got %q", task.PriorWorkDir)
 	}
 }
+
+// claimReturnsNil is a claim helper that expects HTTP 200 with {"task": null}.
+func claimReturnsNil(t *testing.T, runtimeID, daemonID string) {
+	t.Helper()
+	w := httptest.NewRecorder()
+	req := newDaemonTokenRequest("POST", "/api/daemon/runtimes/"+runtimeID+"/claim", nil,
+		testWorkspaceID, daemonID)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("runtimeId", runtimeID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	testHandler.ClaimTaskByRuntime(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ClaimTaskByRuntime: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Task *json.RawMessage `json:"task"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Task != nil && string(*resp.Task) != "null" {
+		t.Fatalf("expected null task, got %s", string(*resp.Task))
+	}
+}
+
+func TestClaimTask_BlockedByDependency_Skipped(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+
+	ctx := context.Background()
+	agentID, runtimeID, daemonID := createRuntimeGuardAgent(t, ctx)
+
+	// Create two issues — one for the blocker task, one for the blocked task.
+	var blockerIssueID, blockedIssueID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO issue (workspace_id, title, status, priority, creator_id, creator_type, number, position)
+		VALUES ($1, 'blocker-issue', 'in_progress', 'none', $2, 'member', 92001, 0)
+		RETURNING id
+	`, testWorkspaceID, testUserID).Scan(&blockerIssueID); err != nil {
+		t.Fatalf("setup: create blocker issue: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, blockerIssueID) })
+
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO issue (workspace_id, title, status, priority, creator_id, creator_type, number, position)
+		VALUES ($1, 'blocked-issue', 'in_progress', 'none', $2, 'member', 92002, 0)
+		RETURNING id
+	`, testWorkspaceID, testUserID).Scan(&blockedIssueID); err != nil {
+		t.Fatalf("setup: create blocked issue: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, blockedIssueID) })
+
+	// Create task records in the task table for both issues.
+	var blockerTaskID, blockedTaskID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO task (workspace_id, number, title, status, issue_id, creator_type, creator_id)
+		VALUES ($1, 92001, 'blocker-task', 'in_progress', $2, 'member', $3)
+		RETURNING id
+	`, testWorkspaceID, blockerIssueID, testUserID).Scan(&blockerTaskID); err != nil {
+		t.Fatalf("setup: create blocker task: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, blockerTaskID) })
+
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO task (workspace_id, number, title, status, issue_id, creator_type, creator_id)
+		VALUES ($1, 92002, 'blocked-task', 'pending', $2, 'member', $3)
+		RETURNING id
+	`, testWorkspaceID, blockedIssueID, testUserID).Scan(&blockedTaskID); err != nil {
+		t.Fatalf("setup: create blocked task: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, blockedTaskID) })
+
+	// blocked-task is blocked_by blocker-task.
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO task_dependency (task_id, depends_on_task_id, type)
+		VALUES ($1, $2, 'blocked_by')
+	`, blockedTaskID, blockerTaskID); err != nil {
+		t.Fatalf("setup: create task_dependency: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM task_dependency WHERE task_id = $1`, blockedTaskID)
+	})
+
+	// Enqueue a task_run for the blocked issue.
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority)
+		VALUES ($1, $2, $3, 'queued', 2)
+	`, agentID, runtimeID, blockedIssueID); err != nil {
+		t.Fatalf("setup: create blocked task_run: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1 AND agent_id = $2`, blockedIssueID, agentID)
+	})
+
+	// Claim should return nil — the only queued task is blocked.
+	claimReturnsNil(t, runtimeID, daemonID)
+
+	// Mark the blocker task as done.
+	if _, err := testPool.Exec(ctx, `
+		UPDATE task SET status = 'done' WHERE id = $1
+	`, blockerTaskID); err != nil {
+		t.Fatalf("mark blocker done: %v", err)
+	}
+
+	// Now the claim should succeed.
+	claimTaskForRuntimeGuard(t, runtimeID, daemonID)
+}
+
+func TestClaimTask_NoDependency_NotBlocked(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+
+	ctx := context.Background()
+	agentID, runtimeID, daemonID := createRuntimeGuardAgent(t, ctx)
+
+	// Issue with a task that has no dependencies — should be claimable.
+	var issueID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO issue (workspace_id, title, status, priority, creator_id, creator_type, number, position)
+		VALUES ($1, 'unblocked-issue', 'in_progress', 'none', $2, 'member', 93001, 0)
+		RETURNING id
+	`, testWorkspaceID, testUserID).Scan(&issueID); err != nil {
+		t.Fatalf("setup: create issue: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID) })
+
+	var taskID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO task (workspace_id, number, title, status, issue_id, creator_type, creator_id)
+		VALUES ($1, 93001, 'unblocked-task', 'pending', $2, 'member', $3)
+		RETURNING id
+	`, testWorkspaceID, issueID, testUserID).Scan(&taskID); err != nil {
+		t.Fatalf("setup: create task: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, taskID) })
+
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority)
+		VALUES ($1, $2, $3, 'queued', 2)
+	`, agentID, runtimeID, issueID); err != nil {
+		t.Fatalf("setup: create task_run: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1 AND agent_id = $2`, issueID, agentID)
+	})
+
+	claimTaskForRuntimeGuard(t, runtimeID, daemonID)
+}
+
+func TestClaimTask_ChatTask_NotAffectedByBlockedByFilter(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+
+	ctx := context.Background()
+	agentID, runtimeID, daemonID := createRuntimeGuardAgent(t, ctx)
+
+	// Create a chat session so we can enqueue a chat task.
+	var chatSessionID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO chat_session (workspace_id, creator_id, agent_id)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`, testWorkspaceID, testUserID, agentID).Scan(&chatSessionID); err != nil {
+		t.Fatalf("setup: create chat session: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM chat_session WHERE id = $1`, chatSessionID) })
+
+	// Enqueue a chat task (task_id IS NULL, chat_session_id is set).
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, chat_session_id)
+		VALUES ($1, $2, NULL, 'queued', 2, $3)
+	`, agentID, runtimeID, chatSessionID); err != nil {
+		t.Fatalf("setup: create chat task_run: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM task_run WHERE chat_session_id = $1 AND agent_id = $2`, chatSessionID, agentID)
+	})
+
+	// Chat task should be claimable regardless of any task_dependency entries.
+	claimTaskForRuntimeGuard(t, runtimeID, daemonID)
+}
+
+func TestClaimTask_BlockerDone_Unblocked(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+
+	ctx := context.Background()
+	agentID, runtimeID, daemonID := createRuntimeGuardAgent(t, ctx)
+
+	var blockerIssueID, blockedIssueID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO issue (workspace_id, title, status, priority, creator_id, creator_type, number, position)
+		VALUES ($1, 'done-blocker-issue', 'done', 'none', $2, 'member', 94001, 0)
+		RETURNING id
+	`, testWorkspaceID, testUserID).Scan(&blockerIssueID); err != nil {
+		t.Fatalf("setup: create blocker issue: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, blockerIssueID) })
+
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO issue (workspace_id, title, status, priority, creator_id, creator_type, number, position)
+		VALUES ($1, 'done-blocked-issue', 'in_progress', 'none', $2, 'member', 94002, 0)
+		RETURNING id
+	`, testWorkspaceID, testUserID).Scan(&blockedIssueID); err != nil {
+		t.Fatalf("setup: create blocked issue: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, blockedIssueID) })
+
+	var blockerTaskID, blockedTaskID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO task (workspace_id, number, title, status, issue_id, creator_type, creator_id)
+		VALUES ($1, 94001, 'done-blocker-task', 'done', $2, 'member', $3)
+		RETURNING id
+	`, testWorkspaceID, blockerIssueID, testUserID).Scan(&blockerTaskID); err != nil {
+		t.Fatalf("setup: create blocker task: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, blockerTaskID) })
+
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO task (workspace_id, number, title, status, issue_id, creator_type, creator_id)
+		VALUES ($1, 94002, 'done-blocked-task', 'pending', $2, 'member', $3)
+		RETURNING id
+	`, testWorkspaceID, blockedIssueID, testUserID).Scan(&blockedTaskID); err != nil {
+		t.Fatalf("setup: create blocked task: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, blockedTaskID) })
+
+	// blocked_by dependency where the blocker is already done.
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO task_dependency (task_id, depends_on_task_id, type)
+		VALUES ($1, $2, 'blocked_by')
+	`, blockedTaskID, blockerTaskID); err != nil {
+		t.Fatalf("setup: create task_dependency: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM task_dependency WHERE task_id = $1`, blockedTaskID)
+	})
+
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority)
+		VALUES ($1, $2, $3, 'queued', 2)
+	`, agentID, runtimeID, blockedIssueID); err != nil {
+		t.Fatalf("setup: create task_run: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1 AND agent_id = $2`, blockedIssueID, agentID)
+	})
+
+	// Blocker is already done, so the blocked task should be claimable.
+	claimTaskForRuntimeGuard(t, runtimeID, daemonID)
+}

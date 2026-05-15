@@ -342,6 +342,13 @@ WHERE id = (
               )
             )
       )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM task t
+          JOIN task_dependency td ON td.task_id = t.id AND td.type = 'blocked_by'
+          JOIN task blocker ON blocker.id = td.depends_on_task_id AND blocker.status <> 'done'
+          WHERE t.issue_id = atq.task_id
+      )
     ORDER BY atq.priority DESC, atq.created_at ASC
     LIMIT 1
     FOR UPDATE SKIP LOCKED
@@ -358,6 +365,9 @@ RETURNING id, agent_id, task_id, status, priority, dispatched_at, started_at, co
 // "any other quick-create-shaped task" (all four FKs NULL) for the same agent —
 // otherwise a user mashing the create button could fire concurrent quick-creates
 // whose completion lookup would race over "most recent issue by this agent".
+//
+// Blocked-by filter: task_runs whose issue has an associated task with
+// unfinished blocked_by predecessors in task_dependency are skipped.
 func (q *Queries) ClaimAgentTask(ctx context.Context, agentID pgtype.UUID) (TaskRun, error) {
 	row := q.db.QueryRow(ctx, claimAgentTask, agentID)
 	var i TaskRun
@@ -1423,9 +1433,16 @@ func (q *Queries) ListPendingTasksByRuntime(ctx context.Context, runtimeID pgtyp
 }
 
 const listQueuedClaimCandidatesByRuntime = `-- name: ListQueuedClaimCandidatesByRuntime :many
-SELECT id, agent_id, task_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, chat_session_id, attempt, max_attempts, parent_task_id, failure_reason, last_heartbeat_at, trigger_summary, force_fresh_session FROM task_run
-WHERE runtime_id = $1 AND status = 'queued'
-ORDER BY priority DESC, created_at ASC
+SELECT tr.id, tr.agent_id, tr.task_id, tr.status, tr.priority, tr.dispatched_at, tr.started_at, tr.completed_at, tr.result, tr.error, tr.created_at, tr.context, tr.runtime_id, tr.session_id, tr.work_dir, tr.trigger_comment_id, tr.chat_session_id, tr.attempt, tr.max_attempts, tr.parent_task_id, tr.failure_reason, tr.last_heartbeat_at, tr.trigger_summary, tr.force_fresh_session FROM task_run tr
+WHERE tr.runtime_id = $1 AND tr.status = 'queued'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM task t
+      JOIN task_dependency td ON td.task_id = t.id AND td.type = 'blocked_by'
+      JOIN task blocker ON blocker.id = td.depends_on_task_id AND blocker.status <> 'done'
+      WHERE t.issue_id = tr.task_id
+  )
+ORDER BY tr.priority DESC, tr.created_at ASC
 `
 
 // Returns rows the runtime can attempt to claim. Status is restricted to
@@ -1436,6 +1453,9 @@ ORDER BY priority DESC, created_at ASC
 // ClaimAgentTask, wasting CPU and a SELECT every poll cycle when the
 // runtime is busy on a long-running task. Backed by the partial index
 // idx_task_run_claim_candidates so the warm path is cheap.
+//
+// Blocked-by filter: excludes task_runs whose issue has an associated task
+// with unfinished blocked_by predecessors in task_dependency.
 func (q *Queries) ListQueuedClaimCandidatesByRuntime(ctx context.Context, runtimeID pgtype.UUID) ([]TaskRun, error) {
 	rows, err := q.db.Query(ctx, listQueuedClaimCandidatesByRuntime, runtimeID)
 	if err != nil {
