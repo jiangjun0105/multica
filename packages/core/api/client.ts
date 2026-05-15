@@ -67,6 +67,14 @@ import type {
   UpdatePlanningTaskRequest,
   ListPlanningTasksParams,
   ListPlanningTasksResponse,
+  Autopilot,
+  CreateAutopilotRequest,
+  UpdateAutopilotRequest,
+  ListAutopilotsResponse,
+  GetAutopilotResponse,
+  ListAutopilotRunsResponse,
+  CreateAutopilotTriggerRequest,
+  UpdateAutopilotTriggerRequest,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import { type Logger, noopLogger } from "../logger";
@@ -1125,6 +1133,59 @@ export class ApiClient {
 
   async deletePlanningTask(id: string): Promise<void> {
     await this.fetch(`/api/tasks/${id}`, { method: "DELETE" });
+  }
+
+  // Autopilots
+  async listAutopilots(): Promise<ListAutopilotsResponse> {
+    return this.fetch("/api/autopilots");
+  }
+
+  async getAutopilot(id: string): Promise<GetAutopilotResponse> {
+    return this.fetch(`/api/autopilots/${id}`);
+  }
+
+  async createAutopilot(data: CreateAutopilotRequest): Promise<Autopilot> {
+    return this.fetch("/api/autopilots", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAutopilot(id: string, data: UpdateAutopilotRequest): Promise<Autopilot> {
+    return this.fetch(`/api/autopilots/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAutopilot(id: string): Promise<void> {
+    await this.fetch(`/api/autopilots/${id}`, { method: "DELETE" });
+  }
+
+  async triggerAutopilot(id: string): Promise<void> {
+    await this.fetch(`/api/autopilots/${id}/trigger`, { method: "POST" });
+  }
+
+  async listAutopilotRuns(id: string): Promise<ListAutopilotRunsResponse> {
+    return this.fetch(`/api/autopilots/${id}/runs`);
+  }
+
+  async createAutopilotTrigger(autopilotId: string, data: CreateAutopilotTriggerRequest): Promise<void> {
+    await this.fetch(`/api/autopilots/${autopilotId}/triggers`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAutopilotTrigger(autopilotId: string, triggerId: string, data: UpdateAutopilotTriggerRequest): Promise<void> {
+    await this.fetch(`/api/autopilots/${autopilotId}/triggers/${triggerId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAutopilotTrigger(autopilotId: string, triggerId: string): Promise<void> {
+    await this.fetch(`/api/autopilots/${autopilotId}/triggers/${triggerId}`, { method: "DELETE" });
   }
 
 }

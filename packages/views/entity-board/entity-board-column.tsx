@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import type { BoardEntity, EntityBoardColumnProps } from "./types";
@@ -9,7 +9,6 @@ export function EntityBoardColumn<T extends BoardEntity>({
   status,
   entityIds,
   entityMap,
-  totalCount,
   footer,
   columnBg,
   heading,
