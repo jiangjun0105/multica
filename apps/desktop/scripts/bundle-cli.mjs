@@ -100,7 +100,14 @@ async function exists(p) {
   }
 }
 
-if (hasGo()) {
+const cliSrcDir = join(serverDir, "cmd", "multica");
+
+if (!(await exists(cliSrcDir))) {
+  console.warn(
+    "[bundle-cli] server/cmd/multica/ not found (CLI was removed). " +
+      "Skipping build — Desktop will auto-install the latest release at runtime.",
+  );
+} else if (hasGo()) {
   const version = sh("git describe --tags --always --dirty") || "dev";
   const commit = sh("git rev-parse --short HEAD") || "unknown";
   const date = new Date().toISOString().replace(/\.\d+Z$/, "Z");
