@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { TASK_STATUS_CONFIG } from "@multica/core/tasks/config";
-import { useLoadMoreTasksByStatus } from "@multica/core/tasks/mutations";
+import { useLoadMoreTasksByStatus } from "@multica/core/tasks/queries";
 import { useTaskViewStore } from "@multica/core/tasks/stores/view-store";
 import { useModalStore } from "@multica/core/modals";
 import { sortTasks } from "../utils/sort";

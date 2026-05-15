@@ -1,62 +1,18 @@
-import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import { planningTaskKeys, TASK_PAGE_SIZE } from "./queries";
+import { planningTaskKeys } from "./queries";
 import {
   addTaskToBuckets,
-  findTaskLocation,
-  getTaskBucket,
   patchTaskInBuckets,
   removeTaskFromBuckets,
-  setTaskBucket,
 } from "./cache-helpers";
 import { useWorkspaceId } from "../hooks";
 import type {
   PlanningTask,
-  PlanningTaskStatus,
   CreatePlanningTaskRequest,
   UpdatePlanningTaskRequest,
   ListPlanningTasksCache,
 } from "../types";
-
-export function useLoadMoreTasksByStatus(status: PlanningTaskStatus) {
-  const qc = useQueryClient();
-  const wsId = useWorkspaceId();
-  const [isLoading, setIsLoading] = useState(false);
-
-  const queryKey = planningTaskKeys.list(wsId);
-  const cache = qc.getQueryData<ListPlanningTasksCache>(queryKey);
-  const bucket = cache?.byStatus[status];
-  const loaded = bucket?.tasks.length ?? 0;
-  const total = bucket?.total ?? 0;
-  const hasMore = loaded < total;
-
-  const loadMore = useCallback(async () => {
-    if (isLoading || !hasMore) return;
-    setIsLoading(true);
-    try {
-      const res = await api.listPlanningTasks({
-        status,
-        limit: TASK_PAGE_SIZE,
-        offset: loaded,
-      });
-      qc.setQueryData<ListPlanningTasksCache>(queryKey, (old) => {
-        if (!old) return old;
-        const prev = getTaskBucket(old, status);
-        const existingIds = new Set(prev.tasks.map((t) => t.id));
-        const appended = res.tasks.filter((t) => !existingIds.has(t.id));
-        return setTaskBucket(old, status, {
-          tasks: [...prev.tasks, ...appended],
-          total: res.total,
-        });
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [qc, queryKey, status, loaded, hasMore, isLoading]);
-
-  return { loadMore, hasMore, isLoading, total };
-}
 
 export function useCreatePlanningTask() {
   const qc = useQueryClient();

@@ -1,13 +1,5 @@
 import type { PlanningTaskStatus } from "../../types";
 
-export const TASK_STATUS_ORDER: PlanningTaskStatus[] = [
-  "pending",
-  "in_progress",
-  "done",
-  "blocked",
-  "cancelled",
-];
-
 export const ALL_TASK_STATUSES: PlanningTaskStatus[] = [
   "pending",
   "in_progress",

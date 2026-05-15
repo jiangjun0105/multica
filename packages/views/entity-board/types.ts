@@ -30,7 +30,8 @@ export interface EntityBoardViewProps<T extends BoardEntity, S extends string> {
   visibleStatuses: S[];
   hiddenStatuses: S[];
   onMoveEntity: (id: string, newStatus: S, newPosition?: number) => void;
-  sortEntities: (entities: T[], sortBy: string, sortDirection: string) => T[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sortEntities: (entities: T[], sortBy: any, sortDirection: any) => T[];
   sortBy: string;
   sortDirection: string;
   renderColumn: (

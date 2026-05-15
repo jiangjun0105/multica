@@ -8,8 +8,8 @@ const PRIORITY_RANK: Record<string, number> = Object.fromEntries(
 
 export function sortTasks(
   tasks: PlanningTask[],
-  field: TaskSortField | string,
-  direction: TaskSortDirection | string,
+  field: TaskSortField,
+  direction: TaskSortDirection,
 ): PlanningTask[] {
   const sorted = [...tasks].sort((a, b) => {
     switch (field) {
@@ -18,15 +18,13 @@ export function sortTasks(
           (PRIORITY_RANK[a.priority] ?? 99) -
           (PRIORITY_RANK[b.priority] ?? 99)
         );
+      case "title":
+        return a.title.localeCompare(b.title);
       case "created_at":
+      default:
         return (
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         );
-      case "title":
-        return a.title.localeCompare(b.title);
-      case "position":
-      default:
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     }
   });
   return direction === "desc" ? sorted.reverse() : sorted;

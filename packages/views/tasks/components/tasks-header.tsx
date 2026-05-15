@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Filter, LayoutGrid, List, SlidersHorizontal, X } from "lucide-react";
+import { Filter, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@multica/ui/components/ui/button";
 import {
   Popover,
@@ -18,7 +18,8 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
 } from "@multica/ui/components/ui/dropdown-menu";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
+
+
 import type { PlanningTaskStatus, PlanningTaskPriority } from "@multica/core/types";
 import {
   TASK_STATUS_CONFIG,
@@ -34,8 +35,6 @@ import {
 import { TaskStatusIcon } from "./task-status-icon";
 
 export function TasksHeader() {
-  const viewMode = useTaskViewStore((s) => s.viewMode);
-  const setViewMode = useTaskViewStore((s) => s.setViewMode);
   const statusFilters = useTaskViewStore((s) => s.statusFilters);
   const priorityFilters = useTaskViewStore((s) => s.priorityFilters);
   const toggleStatusFilter = useTaskViewStore((s) => s.toggleStatusFilter);
@@ -153,55 +152,19 @@ export function TasksHeader() {
               <DropdownMenuRadioItem value="asc">Ascending</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="desc">Descending</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
-            {viewMode === "board" && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Card properties</DropdownMenuLabel>
-                {TASK_CARD_PROPERTY_OPTIONS.map((opt) => (
-                  <DropdownMenuCheckboxItem
-                    key={opt.key}
-                    checked={cardProperties[opt.key]}
-                    onCheckedChange={() => toggleCardProperty(opt.key)}
-                  >
-                    {opt.label}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </>
-            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Card properties</DropdownMenuLabel>
+            {TASK_CARD_PROPERTY_OPTIONS.map((opt) => (
+              <DropdownMenuCheckboxItem
+                key={opt.key}
+                checked={cardProperties[opt.key]}
+                onCheckedChange={() => toggleCardProperty(opt.key)}
+              >
+                {opt.label}
+              </DropdownMenuCheckboxItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* View toggle */}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={viewMode === "board" ? "bg-accent text-foreground" : "text-muted-foreground"}
-                onClick={() => setViewMode("board")}
-              >
-                <LayoutGrid className="size-3.5" />
-              </Button>
-            }
-          />
-          <TooltipContent>Board view</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={viewMode === "list" ? "bg-accent text-foreground" : "text-muted-foreground"}
-                onClick={() => setViewMode("list")}
-              >
-                <List className="size-3.5" />
-              </Button>
-            }
-          />
-          <TooltipContent>List view</TooltipContent>
-        </Tooltip>
       </div>
     </div>
   );

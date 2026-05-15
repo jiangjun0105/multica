@@ -23,7 +23,6 @@ export function TasksPage() {
   const { data: allTasks = [], isLoading: loading } = useQuery(planningTaskListOptions(wsId));
 
   const workspace = useCurrentWorkspace();
-  const viewMode = useTaskViewStore((s) => s.viewMode);
   const statusFilters = useTaskViewStore((s) => s.statusFilters);
   const priorityFilters = useTaskViewStore((s) => s.priorityFilters);
 
@@ -108,21 +107,12 @@ export function TasksPage() {
         </div>
       ) : (
         <div className="flex flex-col flex-1 min-h-0">
-          {viewMode === "board" ? (
-            <TaskBoardView
-              tasks={tasks}
-              visibleStatuses={visibleStatuses}
-              hiddenStatuses={hiddenStatuses}
-              onMoveTask={handleMoveTask}
-            />
-          ) : (
-            <TaskBoardView
-              tasks={tasks}
-              visibleStatuses={visibleStatuses}
-              hiddenStatuses={hiddenStatuses}
-              onMoveTask={handleMoveTask}
-            />
-          )}
+          <TaskBoardView
+            tasks={tasks}
+            visibleStatuses={visibleStatuses}
+            hiddenStatuses={hiddenStatuses}
+            onMoveTask={handleMoveTask}
+          />
         </div>
       )}
     </div>

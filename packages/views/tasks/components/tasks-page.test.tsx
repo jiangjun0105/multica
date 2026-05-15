@@ -64,7 +64,6 @@ vi.mock("@multica/core/api", () => ({
 vi.mock("@multica/core/tasks/config", () => ({
   ALL_TASK_STATUSES: ["pending", "in_progress", "done", "blocked", "cancelled"],
   TASK_BOARD_STATUSES: ["pending", "in_progress", "done", "blocked"],
-  TASK_STATUS_ORDER: ["pending", "in_progress", "done", "blocked", "cancelled"],
   TASK_STATUS_CONFIG: {
     pending: { label: "Pending", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent", dividerColor: "bg-muted-foreground/40", columnBg: "bg-muted/40" },
     in_progress: { label: "In Progress", iconColor: "text-warning", hoverBg: "hover:bg-warning/10", dividerColor: "bg-warning", columnBg: "bg-warning/5" },
@@ -84,7 +83,7 @@ const mockTaskViewState = {
   viewMode: "board" as const,
   statusFilters: [] as string[],
   priorityFilters: [] as string[],
-  sortBy: "position" as const,
+  sortBy: "created_at" as const,
   sortDirection: "asc" as const,
   cardProperties: { priority: true, description: true, suitability: true },
   listCollapsedStatuses: [] as string[],
@@ -106,9 +105,8 @@ vi.mock("@multica/core/tasks/stores/view-store", () => ({
     { getState: () => mockTaskViewState, setState: vi.fn() },
   ),
   TASK_SORT_OPTIONS: [
-    { value: "position", label: "Manual" },
-    { value: "priority", label: "Priority" },
     { value: "created_at", label: "Created date" },
+    { value: "priority", label: "Priority" },
     { value: "title", label: "Title" },
   ],
   TASK_CARD_PROPERTY_OPTIONS: [
@@ -116,17 +114,6 @@ vi.mock("@multica/core/tasks/stores/view-store", () => ({
     { key: "description", label: "Description" },
     { key: "suitability", label: "Suitability" },
   ],
-}));
-
-vi.mock("@multica/core/tasks/stores/view-store-context", () => ({
-  TaskViewStoreProvider: ({ children }: { children: React.ReactNode }) => children,
-  useTaskViewStoreFromContext: (selector?: any) =>
-    selector ? selector(mockTaskViewState) : mockTaskViewState,
-  useTaskViewStoreApi: () => ({
-    getState: () => mockTaskViewState,
-    setState: vi.fn(),
-    subscribe: vi.fn(),
-  }),
 }));
 
 vi.mock("@multica/core/modals", () => ({

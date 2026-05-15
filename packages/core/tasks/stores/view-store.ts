@@ -8,7 +8,7 @@ import { createWorkspaceAwareStorage, registerForWorkspaceRehydration } from "..
 import { defaultStorage } from "../../platform/storage";
 
 export type TaskViewMode = "board" | "list";
-export type TaskSortField = "position" | "priority" | "created_at" | "title";
+export type TaskSortField = "priority" | "created_at" | "title";
 export type TaskSortDirection = "asc" | "desc";
 
 export interface TaskCardProperties {
@@ -18,9 +18,8 @@ export interface TaskCardProperties {
 }
 
 export const TASK_SORT_OPTIONS: { value: TaskSortField; label: string }[] = [
-  { value: "position", label: "Manual" },
-  { value: "priority", label: "Priority" },
   { value: "created_at", label: "Created date" },
+  { value: "priority", label: "Priority" },
   { value: "title", label: "Title" },
 ];
 
@@ -54,7 +53,7 @@ const taskViewStoreSlice = (set: { (partial: Partial<TaskViewState> | ((state: T
   viewMode: "board",
   statusFilters: [],
   priorityFilters: [],
-  sortBy: "position",
+  sortBy: "created_at",
   sortDirection: "asc",
   cardProperties: {
     priority: true,

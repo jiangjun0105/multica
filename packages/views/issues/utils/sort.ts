@@ -8,8 +8,8 @@ const PRIORITY_RANK: Record<string, number> = Object.fromEntries(
 
 export function sortIssues(
   issues: Issue[],
-  field: SortField | string,
-  direction: SortDirection | string,
+  field: SortField,
+  direction: SortDirection
 ): Issue[] {
   const sorted = [...issues].sort((a, b) => {
     switch (field) {

@@ -54,11 +54,8 @@ function computePosition<T extends BoardEntity>(
 ): number {
   const idx = ids.indexOf(activeId);
   if (idx === -1) return 0;
-  const getPos = (id: string) => {
-    const entity = entityMap.get(id);
-    return entity?.position ?? ids.indexOf(id);
-  };
-  if (ids.length === 1) return getPos(activeId);
+  const getPos = (id: string) => entityMap.get(id)?.position ?? 0;
+  if (ids.length === 1) return entityMap.get(activeId)?.position ?? 0;
   if (idx === 0) return getPos(ids[1]!) - 1;
   if (idx === ids.length - 1) return getPos(ids[idx - 1]!) + 1;
   return (getPos(ids[idx - 1]!) + getPos(ids[idx + 1]!)) / 2;
