@@ -85,6 +85,13 @@ const (
 	EventInvitationDeclined = "invitation:declined"
 	EventInvitationRevoked  = "invitation:revoked"
 
+	// Planning-task events (the "task" planning table, not task_run).
+	EventPlanningTaskCreated   = "planning_task:created"
+	EventPlanningTaskUpdated   = "planning_task:updated"
+	EventPlanningTaskDeleted   = "planning_task:deleted"
+	EventPlanningTaskDispatched = "planning_task:dispatched"
+	EventPlanningTaskCancelled = "planning_task:cancelled"
+
 	// Daemon events
 	EventDaemonHeartbeat     = "daemon:heartbeat"
 	EventDaemonHeartbeatAck  = "daemon:heartbeat_ack"

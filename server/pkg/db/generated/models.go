@@ -412,6 +412,7 @@ type Workspace struct {
 	Repos        []byte             `json:"repos"`
 	IssuePrefix  string             `json:"issue_prefix"`
 	IssueCounter int32              `json:"issue_counter"`
+	TaskCounter  int32              `json:"task_counter"`
 }
 
 type WorkspaceInvitation struct {
