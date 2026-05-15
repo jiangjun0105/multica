@@ -81,7 +81,9 @@ type TriageFinalizeResponse struct {
 
 func triageProposalToResponse(p db.TriageProposal) TriageProposalResponse {
 	var proposal any
-	json.Unmarshal(p.Proposal, &proposal)
+	if err := json.Unmarshal(p.Proposal, &proposal); err != nil {
+		slog.Warn("failed to unmarshal triage proposal JSON", "proposal_id", uuidToString(p.ID), "error", err)
+	}
 	return TriageProposalResponse{
 		ID:             uuidToString(p.ID),
 		IssueID:        uuidToString(p.IssueID),
@@ -194,8 +196,6 @@ func (h *Handler) CreateTriageProposal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to create proposal")
 		return
 	}
-
-	h.publish(protocol.EventIssueUpdated, workspaceID, creatorType, creatorID, issueToResponse(issue, h.getIssuePrefix(r.Context(), issue.WorkspaceID)))
 
 	writeJSON(w, http.StatusCreated, triageProposalToResponse(proposal))
 }
@@ -319,6 +319,8 @@ func (h *Handler) FinalizeTriageProposal(w http.ResponseWriter, r *http.Request)
 	for i, pt := range proposedTasks {
 		for _, dep := range pt.Dependencies {
 			if dep.RefIndex < 0 || dep.RefIndex >= len(createdTasks) {
+				slog.Warn("skipping invalid dependency ref_index during finalize",
+					"proposal_id", req.ProposalID, "task_index", i, "ref_index", dep.RefIndex, "task_count", len(createdTasks))
 				continue
 			}
 			err := qtx.CreateTaskDependency(r.Context(), db.CreateTaskDependencyParams{
