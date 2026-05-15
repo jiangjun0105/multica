@@ -42,10 +42,10 @@ const createTask = `-- name: CreateTask :one
 
 INSERT INTO task (
     workspace_id, number, title, description, status, priority,
-    suitability, issue_id, creator_type, creator_id
+    suitability, manual_test, issue_id, creator_type, creator_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
-    $9, $10,
+    $9, $10, $11,
     $7, $8
 ) RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at
 `
@@ -60,6 +60,7 @@ type CreateTaskParams struct {
 	CreatorType string      `json:"creator_type"`
 	CreatorID   pgtype.UUID `json:"creator_id"`
 	Suitability pgtype.Text `json:"suitability"`
+	ManualTest  pgtype.Text `json:"manual_test"`
 	IssueID     pgtype.UUID `json:"issue_id"`
 }
 
@@ -75,6 +76,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.CreatorType,
 		arg.CreatorID,
 		arg.Suitability,
+		arg.ManualTest,
 		arg.IssueID,
 	)
 	var i Task
@@ -217,13 +219,18 @@ func (q *Queries) GetTaskInWorkspace(ctx context.Context, arg GetTaskInWorkspace
 }
 
 const incrementTaskCounter = `-- name: IncrementTaskCounter :one
-UPDATE workspace SET task_counter = task_counter + 1
+UPDATE workspace SET task_counter = task_counter + $2
 WHERE id = $1
 RETURNING task_counter
 `
 
-func (q *Queries) IncrementTaskCounter(ctx context.Context, id pgtype.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, incrementTaskCounter, id)
+type IncrementTaskCounterParams struct {
+	ID          pgtype.UUID `json:"id"`
+	TaskCounter int32       `json:"task_counter"`
+}
+
+func (q *Queries) IncrementTaskCounter(ctx context.Context, arg IncrementTaskCounterParams) (int32, error) {
+	row := q.db.QueryRow(ctx, incrementTaskCounter, arg.ID, arg.TaskCounter)
 	var task_counter int32
 	err := row.Scan(&task_counter)
 	return task_counter, err

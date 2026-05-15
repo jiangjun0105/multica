@@ -248,7 +248,10 @@ func (h *Handler) CreatePlanningTask(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 
 	qtx := h.Queries.WithTx(tx)
-	taskNumber, err := qtx.IncrementTaskCounter(r.Context(), wsUUID)
+	taskNumber, err := qtx.IncrementTaskCounter(r.Context(), db.IncrementTaskCounterParams{
+		ID:          wsUUID,
+		TaskCounter: 1,
+	})
 	if err != nil {
 		slog.Warn("increment task counter failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
 		writeError(w, http.StatusInternalServerError, "failed to create task")

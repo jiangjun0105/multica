@@ -3,10 +3,10 @@
 -- name: CreateTask :one
 INSERT INTO task (
     workspace_id, number, title, description, status, priority,
-    suitability, issue_id, creator_type, creator_id
+    suitability, manual_test, issue_id, creator_type, creator_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
-    sqlc.narg('suitability'), sqlc.narg('issue_id'),
+    sqlc.narg('suitability'), sqlc.narg('manual_test'), sqlc.narg('issue_id'),
     $7, $8
 ) RETURNING *;
 
@@ -54,7 +54,7 @@ WHERE id = $1 AND workspace_id = $2
 RETURNING id;
 
 -- name: IncrementTaskCounter :one
-UPDATE workspace SET task_counter = task_counter + 1
+UPDATE workspace SET task_counter = task_counter + $2
 WHERE id = $1
 RETURNING task_counter;
 

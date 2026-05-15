@@ -11,82 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createTask = `-- name: CreateTask :one
-INSERT INTO task (
-    workspace_id, number, title, description,
-    status, priority, suitability, manual_test,
-    issue_id, creator_type, creator_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at
-`
-
-type CreateTaskParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Number      int32       `json:"number"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Status      string      `json:"status"`
-	Priority    string      `json:"priority"`
-	Suitability pgtype.Text `json:"suitability"`
-	ManualTest  pgtype.Text `json:"manual_test"`
-	IssueID     pgtype.UUID `json:"issue_id"`
-	CreatorType string      `json:"creator_type"`
-	CreatorID   pgtype.UUID `json:"creator_id"`
-}
-
-func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
-	row := q.db.QueryRow(ctx, createTask,
-		arg.WorkspaceID,
-		arg.Number,
-		arg.Title,
-		arg.Description,
-		arg.Status,
-		arg.Priority,
-		arg.Suitability,
-		arg.ManualTest,
-		arg.IssueID,
-		arg.CreatorType,
-		arg.CreatorID,
-	)
-	var i Task
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Number,
-		&i.Title,
-		&i.Description,
-		&i.Status,
-		&i.Priority,
-		&i.Suitability,
-		&i.Branch,
-		&i.Pr,
-		&i.ManualTest,
-		&i.IssueID,
-		&i.CurrentRunID,
-		&i.CreatorType,
-		&i.CreatorID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const createTaskDependency = `-- name: CreateTaskDependency :exec
-INSERT INTO task_dependency (task_id, depends_on_task_id, type)
-VALUES ($1, $2, $3)
-`
-
-type CreateTaskDependencyParams struct {
-	TaskID          pgtype.UUID `json:"task_id"`
-	DependsOnTaskID pgtype.UUID `json:"depends_on_task_id"`
-	Type            string      `json:"type"`
-}
-
-func (q *Queries) CreateTaskDependency(ctx context.Context, arg CreateTaskDependencyParams) error {
-	_, err := q.db.Exec(ctx, createTaskDependency, arg.TaskID, arg.DependsOnTaskID, arg.Type)
-	return err
-}
-
 const createTriageProposal = `-- name: CreateTriageProposal :one
 INSERT INTO triage_proposal (
     issue_id, workspace_id, status,
@@ -171,24 +95,6 @@ func (q *Queries) GetTriageProposalInWorkspace(ctx context.Context, arg GetTriag
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const incrementTaskCounter = `-- name: IncrementTaskCounter :one
-UPDATE workspace SET task_counter = task_counter + $2
-WHERE id = $1
-RETURNING task_counter
-`
-
-type IncrementTaskCounterParams struct {
-	ID          pgtype.UUID `json:"id"`
-	TaskCounter int32       `json:"task_counter"`
-}
-
-func (q *Queries) IncrementTaskCounter(ctx context.Context, arg IncrementTaskCounterParams) (int32, error) {
-	row := q.db.QueryRow(ctx, incrementTaskCounter, arg.ID, arg.TaskCounter)
-	var task_counter int32
-	err := row.Scan(&task_counter)
-	return task_counter, err
 }
 
 const listTaskDependenciesByTaskIDs = `-- name: ListTaskDependenciesByTaskIDs :many
