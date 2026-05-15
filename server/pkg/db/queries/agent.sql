@@ -170,6 +170,9 @@ WHERE id = $1;
 -- "any other quick-create-shaped task" (all four FKs NULL) for the same agent —
 -- otherwise a user mashing the create button could fire concurrent quick-creates
 -- whose completion lookup would race over "most recent issue by this agent".
+--
+-- Blocked-by filter: task_runs whose issue has an associated task with
+-- unfinished blocked_by predecessors in task_dependency are skipped.
 UPDATE task_run
 SET status = 'dispatched', dispatched_at = now()
 WHERE id = (
@@ -189,6 +192,13 @@ WHERE id = (
                 AND active.chat_session_id IS NULL
               )
             )
+      )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM task t
+          JOIN task_dependency td ON td.task_id = t.id AND td.type = 'blocked_by'
+          JOIN task blocker ON blocker.id = td.depends_on_task_id AND blocker.status <> 'done'
+          WHERE t.issue_id = atq.task_id
       )
     ORDER BY atq.priority DESC, atq.created_at ASC
     LIMIT 1
@@ -329,9 +339,19 @@ ORDER BY priority DESC, created_at ASC;
 -- ClaimAgentTask, wasting CPU and a SELECT every poll cycle when the
 -- runtime is busy on a long-running task. Backed by the partial index
 -- idx_task_run_claim_candidates so the warm path is cheap.
-SELECT * FROM task_run
-WHERE runtime_id = $1 AND status = 'queued'
-ORDER BY priority DESC, created_at ASC;
+--
+-- Blocked-by filter: excludes task_runs whose issue has an associated task
+-- with unfinished blocked_by predecessors in task_dependency.
+SELECT tr.* FROM task_run tr
+WHERE tr.runtime_id = $1 AND tr.status = 'queued'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM task t
+      JOIN task_dependency td ON td.task_id = t.id AND td.type = 'blocked_by'
+      JOIN task blocker ON blocker.id = td.depends_on_task_id AND blocker.status <> 'done'
+      WHERE t.issue_id = tr.task_id
+  )
+ORDER BY tr.priority DESC, tr.created_at ASC;
 
 -- name: ListActiveTasksByIssue :many
 SELECT * FROM task_run
