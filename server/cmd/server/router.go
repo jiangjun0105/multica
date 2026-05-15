@@ -327,8 +327,8 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
-			// Task messages (user-facing, not daemon auth)
-			r.Get("/api/tasks/{taskId}/messages", h.ListTaskMessagesByUser)
+			// Task-run messages (user-facing, not daemon auth)
+			r.Get("/api/task-runs/{taskId}/messages", h.ListTaskMessagesByUser)
 
 			// Labels
 			r.Route("/api/labels", func(r chi.Router) {
@@ -410,8 +410,25 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
-			// Tasks (user-facing, with ownership check)
-			r.Post("/api/tasks/{taskId}/cancel", h.CancelTaskByUser)
+			// Planning tasks (the "task" planning table — not task_run)
+			r.Route("/api/tasks", func(r chi.Router) {
+				r.Get("/", h.ListPlanningTasks)
+				r.Post("/", h.CreatePlanningTask)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetPlanningTask)
+					r.Patch("/", h.UpdatePlanningTask)
+					r.Delete("/", h.DeletePlanningTask)
+					r.Post("/dispatch", h.DispatchPlanningTask)
+					r.Post("/cancel", h.CancelPlanningTask)
+					r.Post("/retry", h.RetryPlanningTask)
+					r.Get("/dependencies", h.ListPlanningTaskDependencies)
+					r.Post("/dependencies", h.AddTaskDependency)
+					r.Delete("/dependencies", h.RemoveTaskDependency)
+				})
+			})
+
+			// Task runs (user-facing, with ownership check)
+			r.Post("/api/task-runs/{taskId}/cancel", h.CancelTaskByUser)
 
 			// Workspace-wide agent task snapshot for presence derivation:
 			// every active task + each agent's most recent terminal task.
