@@ -23,23 +23,6 @@ UPDATE triage_proposal SET
 WHERE id = $1
 RETURNING *;
 
--- name: IncrementTaskCounter :one
-UPDATE workspace SET task_counter = task_counter + $2
-WHERE id = $1
-RETURNING task_counter;
-
--- name: CreateTask :one
-INSERT INTO task (
-    workspace_id, number, title, description,
-    status, priority, suitability, manual_test,
-    issue_id, creator_type, creator_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING *;
-
--- name: CreateTaskDependency :exec
-INSERT INTO task_dependency (task_id, depends_on_task_id, type)
-VALUES ($1, $2, $3);
-
 -- name: ListTasksByIssueID :many
 SELECT * FROM task
 WHERE issue_id = $1

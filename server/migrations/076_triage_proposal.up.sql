@@ -1,7 +1,3 @@
--- Add task_counter to workspace for auto-incrementing task numbers,
--- mirroring the existing issue_counter pattern.
-ALTER TABLE workspace ADD COLUMN task_counter INT NOT NULL DEFAULT 0;
-
 -- Triage proposal: stores the agent's proposed task breakdown for an issue.
 -- The proposal JSONB contains the structured plan (tasks + dependencies)
 -- submitted by the triage agent via submit_plan. A human approves or

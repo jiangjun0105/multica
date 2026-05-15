@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Inbox,
   ListTodo,
+  ClipboardList,
   Bot,
   ChevronDown,
   ChevronRight,
@@ -96,6 +97,7 @@ type NavKey =
   | "inbox"
   | "myIssues"
   | "issues"
+  | "tasks"
   | "agents"
   | "skills"
   | "settings";
@@ -107,6 +109,7 @@ const personalNav: { key: NavKey; label: string; icon: typeof Inbox }[] = [
 
 const workspaceNav: { key: NavKey; label: string; icon: typeof Inbox }[] = [
   { key: "issues", label: "Issues", icon: ListTodo },
+  { key: "tasks", label: "Tasks", icon: ClipboardList },
   { key: "agents", label: "Agents", icon: Bot },
 ];
 

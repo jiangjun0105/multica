@@ -62,6 +62,19 @@ import type {
   Invitation,
   NotificationPreferenceResponse,
   NotificationPreferences,
+  PlanningTask,
+  CreatePlanningTaskRequest,
+  UpdatePlanningTaskRequest,
+  ListPlanningTasksParams,
+  ListPlanningTasksResponse,
+  Autopilot,
+  CreateAutopilotRequest,
+  UpdateAutopilotRequest,
+  ListAutopilotsResponse,
+  GetAutopilotResponse,
+  ListAutopilotRunsResponse,
+  CreateAutopilotTriggerRequest,
+  UpdateAutopilotTriggerRequest,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import { type Logger, noopLogger } from "../logger";
@@ -1087,6 +1100,92 @@ export class ApiClient {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  // Planning Tasks
+  async listPlanningTasks(params?: ListPlanningTasksParams): Promise<ListPlanningTasksResponse> {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset) search.set("offset", String(params.offset));
+    if (params?.status) search.set("status", params.status);
+    if (params?.priority) search.set("priority", params.priority);
+    if (params?.issue_id) search.set("issue_id", params.issue_id);
+    return this.fetch(`/api/tasks?${search}`);
+  }
+
+  async getPlanningTask(id: string): Promise<PlanningTask> {
+    return this.fetch(`/api/tasks/${id}`);
+  }
+
+  async createPlanningTask(data: CreatePlanningTaskRequest): Promise<PlanningTask> {
+    return this.fetch("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePlanningTask(id: string, data: UpdatePlanningTaskRequest): Promise<PlanningTask> {
+    return this.fetch(`/api/tasks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deletePlanningTask(id: string): Promise<void> {
+    await this.fetch(`/api/tasks/${id}`, { method: "DELETE" });
+  }
+
+  // Autopilots
+  async listAutopilots(): Promise<ListAutopilotsResponse> {
+    return this.fetch("/api/autopilots");
+  }
+
+  async getAutopilot(id: string): Promise<GetAutopilotResponse> {
+    return this.fetch(`/api/autopilots/${id}`);
+  }
+
+  async createAutopilot(data: CreateAutopilotRequest): Promise<Autopilot> {
+    return this.fetch("/api/autopilots", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAutopilot(id: string, data: UpdateAutopilotRequest): Promise<Autopilot> {
+    return this.fetch(`/api/autopilots/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAutopilot(id: string): Promise<void> {
+    await this.fetch(`/api/autopilots/${id}`, { method: "DELETE" });
+  }
+
+  async triggerAutopilot(id: string): Promise<void> {
+    await this.fetch(`/api/autopilots/${id}/trigger`, { method: "POST" });
+  }
+
+  async listAutopilotRuns(id: string): Promise<ListAutopilotRunsResponse> {
+    return this.fetch(`/api/autopilots/${id}/runs`);
+  }
+
+  async createAutopilotTrigger(autopilotId: string, data: CreateAutopilotTriggerRequest): Promise<void> {
+    await this.fetch(`/api/autopilots/${autopilotId}/triggers`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAutopilotTrigger(autopilotId: string, triggerId: string, data: UpdateAutopilotTriggerRequest): Promise<void> {
+    await this.fetch(`/api/autopilots/${autopilotId}/triggers/${triggerId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAutopilotTrigger(autopilotId: string, triggerId: string): Promise<void> {
+    await this.fetch(`/api/autopilots/${autopilotId}/triggers/${triggerId}`, { method: "DELETE" });
   }
 
 }
