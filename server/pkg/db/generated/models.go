@@ -376,6 +376,18 @@ type TaskUsage struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
+type TriageProposal struct {
+	ID             pgtype.UUID        `json:"id"`
+	IssueID        pgtype.UUID        `json:"issue_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	Status         string             `json:"status"`
+	ProposedByType string             `json:"proposed_by_type"`
+	ProposedByID   pgtype.UUID        `json:"proposed_by_id"`
+	Proposal       []byte             `json:"proposal"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type User struct {
 	ID                      pgtype.UUID        `json:"id"`
 	Name                    string             `json:"name"`
@@ -412,6 +424,7 @@ type Workspace struct {
 	Repos        []byte             `json:"repos"`
 	IssuePrefix  string             `json:"issue_prefix"`
 	IssueCounter int32              `json:"issue_counter"`
+	TaskCounter  int32              `json:"task_counter"`
 }
 
 type WorkspaceInvitation struct {
