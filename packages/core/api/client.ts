@@ -62,6 +62,11 @@ import type {
   Invitation,
   NotificationPreferenceResponse,
   NotificationPreferences,
+  PlanningTask,
+  CreatePlanningTaskRequest,
+  UpdatePlanningTaskRequest,
+  ListPlanningTasksParams,
+  ListPlanningTasksResponse,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import { type Logger, noopLogger } from "../logger";
@@ -1087,6 +1092,39 @@ export class ApiClient {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  // Planning Tasks
+  async listPlanningTasks(params?: ListPlanningTasksParams): Promise<ListPlanningTasksResponse> {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset) search.set("offset", String(params.offset));
+    if (params?.status) search.set("status", params.status);
+    if (params?.priority) search.set("priority", params.priority);
+    if (params?.issue_id) search.set("issue_id", params.issue_id);
+    return this.fetch(`/api/tasks?${search}`);
+  }
+
+  async getPlanningTask(id: string): Promise<PlanningTask> {
+    return this.fetch(`/api/tasks/${id}`);
+  }
+
+  async createPlanningTask(data: CreatePlanningTaskRequest): Promise<PlanningTask> {
+    return this.fetch("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePlanningTask(id: string, data: UpdatePlanningTaskRequest): Promise<PlanningTask> {
+    return this.fetch(`/api/tasks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deletePlanningTask(id: string): Promise<void> {
+    await this.fetch(`/api/tasks/${id}`, { method: "DELETE" });
   }
 
 }
