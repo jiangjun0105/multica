@@ -6,8 +6,10 @@ import type { AnimateLayoutChanges } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { PlanningTask, IssuePriority } from "@multica/core/types";
 import { TASK_PRIORITY_CONFIG } from "@multica/core/tasks/config";
+import { useWorkspacePaths } from "@multica/core/paths";
 import { useTaskViewStore } from "@multica/core/tasks/stores/view-store";
 import { PriorityIcon } from "../../issues/components/priority-icon";
+import { AppLink } from "../../navigation";
 
 const SUITABILITY_LABELS: Record<string, string> = {
   auto_agent_ready: "Agent Ready",
@@ -74,6 +76,7 @@ export const DraggableTaskBoardCard = memo(function DraggableTaskBoardCard({
 }: {
   task: PlanningTask;
 }) {
+  const p = useWorkspacePaths();
   const {
     attributes,
     listeners,
@@ -100,7 +103,12 @@ export const DraggableTaskBoardCard = memo(function DraggableTaskBoardCard({
       {...listeners}
       className={`group/card ${isDragging ? "opacity-30" : ""}`}
     >
-      <TaskBoardCardContent task={task} />
+      <AppLink
+        href={p.taskDetail(task.id)}
+        className={`group block transition-colors ${isDragging ? "pointer-events-none" : ""}`}
+      >
+        <TaskBoardCardContent task={task} />
+      </AppLink>
     </div>
   );
 });
