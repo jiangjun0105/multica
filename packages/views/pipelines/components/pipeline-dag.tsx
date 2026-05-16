@@ -29,7 +29,7 @@ const NODE_HEIGHT = 72;
 function layoutDag(nodes: Node[], edges: Edge[]) {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "LR", nodesep: 40, ranksep: 80 });
+  g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 60 });
 
   nodes.forEach((node) => {
     g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
@@ -60,7 +60,7 @@ function TaskNode({ data }: NodeProps) {
 
   return (
     <div className="rounded-lg border bg-card shadow-sm">
-      <Handle type="target" position={Position.Left} className="!bg-border" />
+      <Handle type="target" position={Position.Top} className="!bg-border" />
       <AppLink
         href={paths.taskDetail(task.id)}
         className="block p-3 hover:bg-accent/50 rounded-lg transition-colors"
@@ -75,7 +75,7 @@ function TaskNode({ data }: NodeProps) {
           {task.title}
         </p>
       </AppLink>
-      <Handle type="source" position={Position.Right} className="!bg-border" />
+      <Handle type="source" position={Position.Bottom} className="!bg-border" />
     </div>
   );
 }
