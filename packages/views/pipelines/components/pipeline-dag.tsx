@@ -5,9 +5,6 @@ import {
   ReactFlow,
   type Node,
   type Edge,
-  type EdgeProps,
-  type EdgeTypes,
-  BaseEdge,
   Background,
   Controls,
   MarkerType,
@@ -28,7 +25,7 @@ const NODE_WIDTH = 240;
 const NODE_HEIGHT = 76;
 
 // ---------------------------------------------------------------------------
-// Status visuals (unchanged)
+// Status visuals
 // ---------------------------------------------------------------------------
 
 const STATUS_LABEL: Record<PlanningTaskStatus, string> = {
@@ -88,13 +85,10 @@ function edgeColorFor(task: PlanningTask | undefined): string {
 // ---------------------------------------------------------------------------
 // Layout — ELK
 //
-// ELK gives much better placement and routing than dagre for DAGs with many
-// cross-rank edges. We use the 'layered' algorithm with BRANDES_KOEPF node
-// placement (aligns nodes along their longest connected paths) and
-// ORTHOGONAL edge routing.
-//
-// ELK is async: layout(graph) returns a promise. We run it in a useEffect
-// and keep the laid-out nodes in state.
+// ELK runs the 'layered' algorithm with NETWORK_SIMPLEX placement plus
+// post-compaction for a tight bounding box and good sibling alignment.
+// We only ask ELK for *node positions*; React Flow draws its own bezier
+// edges between handles (matches the auto-agent admin DAG look).
 // ---------------------------------------------------------------------------
 
 const elk = new ELK();
@@ -102,44 +96,23 @@ const elk = new ELK();
 const ELK_LAYOUT_OPTIONS: Record<string, string> = {
   "elk.algorithm": "layered",
   "elk.direction": "DOWN",
-  // Tight spacing — we'd rather scroll a little than waste horizontal
-  // whitespace.
   "elk.layered.spacing.nodeNodeBetweenLayers": "60",
   "elk.spacing.nodeNode": "24",
   "elk.spacing.edgeNode": "20",
   "elk.spacing.edgeEdge": "12",
-  // NETWORK_SIMPLEX packs nodes tighter than BRANDES_KOEPF (which leaves
-  // gaps to keep edges straight). Combined with post-compaction this
-  // produces a much tighter bounding box and better vertical alignment of
-  // siblings under their parents.
   "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
   "elk.layered.nodePlacement.favorStraightEdges": "true",
   "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
-  "elk.layered.crossingMinimization.semiInteractive": "false",
-  // Post-compaction: after placement, slide each component as close to
-  // the others as it can go without colliding.
   "elk.layered.compaction.postCompaction.strategy": "LEFT_RIGHT_CONNECTION_LOCKING",
   "elk.layered.compaction.connectedComponents": "true",
-  // ORTHOGONAL: right-angle routes. Combined with rounded corners in the
-  // custom edge renderer below, this gives clean, predictable lanes. SPLINES
-  // here produced loopy curves because ELK's bend points were too close
-  // together for the smoothing to look graceful.
-  "elk.edgeRouting": "ORTHOGONAL",
   "elk.layered.mergeEdges": "true",
-  // Higher thoroughness → more iterations of crossing-min and placement.
-  // 100 is the max useful value; default is 7.
   "elk.layered.thoroughness": "100",
 };
-
-interface ElkPoint {
-  x: number;
-  y: number;
-}
 
 async function layoutWithElk(
   nodes: Node[],
   edges: Edge[],
-): Promise<{ nodes: Node[]; edgePoints: Map<string, ElkPoint[]>; height: number }> {
+): Promise<{ nodes: Node[]; height: number }> {
   const elkGraph: ElkNode = {
     id: "root",
     layoutOptions: ELK_LAYOUT_OPTIONS,
@@ -164,20 +137,6 @@ async function layoutWithElk(
     }
   }
 
-  // Capture per-edge bend points so the custom edge renderer can draw the
-  // exact path ELK computed (rather than React Flow drawing its own).
-  const edgePoints = new Map<string, ElkPoint[]>();
-  for (const e of result.edges ?? []) {
-    const section = e.sections?.[0];
-    if (!section) continue;
-    const pts: ElkPoint[] = [
-      { x: section.startPoint.x, y: section.startPoint.y },
-      ...(section.bendPoints ?? []).map((p) => ({ x: p.x, y: p.y })),
-      { x: section.endPoint.x, y: section.endPoint.y },
-    ];
-    edgePoints.set(e.id, pts);
-  }
-
   const laidOut = nodes.map((node) => ({
     ...node,
     position: positionsById.get(node.id) ?? { x: 0, y: 0 },
@@ -185,44 +144,7 @@ async function layoutWithElk(
     targetPosition: Position.Top,
   }));
 
-  return { nodes: laidOut, edgePoints, height: result.height ?? 0 };
-}
-
-// Build an SVG path from ELK's orthogonal bend points, replacing each
-// 90° corner with a small arc of radius `radius` so the path doesn't have
-// pixel-sharp elbows. Falls back to a straight line at any point where
-// the rounding would overshoot a segment.
-const CORNER_RADIUS = 8;
-
-function bendPointsToSvgPath(points: ElkPoint[]): string {
-  if (points.length < 2) return "";
-  if (points.length === 2) {
-    return `M ${points[0]!.x},${points[0]!.y} L ${points[1]!.x},${points[1]!.y}`;
-  }
-
-  let d = `M ${points[0]!.x},${points[0]!.y}`;
-  for (let i = 1; i < points.length - 1; i++) {
-    const prev = points[i - 1]!;
-    const curr = points[i]!;
-    const next = points[i + 1]!;
-
-    // Distances along each leg
-    const inLen = Math.hypot(curr.x - prev.x, curr.y - prev.y);
-    const outLen = Math.hypot(next.x - curr.x, next.y - curr.y);
-    const r = Math.min(CORNER_RADIUS, inLen / 2, outLen / 2);
-
-    // Point on the incoming leg, r before the corner
-    const ix = curr.x - ((curr.x - prev.x) / (inLen || 1)) * r;
-    const iy = curr.y - ((curr.y - prev.y) / (inLen || 1)) * r;
-    // Point on the outgoing leg, r after the corner
-    const ox = curr.x + ((next.x - curr.x) / (outLen || 1)) * r;
-    const oy = curr.y + ((next.y - curr.y) / (outLen || 1)) * r;
-
-    d += ` L ${ix},${iy} Q ${curr.x},${curr.y} ${ox},${oy}`;
-  }
-  const end = points[points.length - 1]!;
-  d += ` L ${end.x},${end.y}`;
-  return d;
+  return { nodes: laidOut, height: result.height ?? 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -276,32 +198,6 @@ function TaskNode({ data }: NodeProps) {
 const nodeTypes = { task: TaskNode };
 
 // ---------------------------------------------------------------------------
-// Custom edge — draws the path ELK computed (instead of React Flow's
-// built-in smoothstep/bezier ignoring it).
-// ---------------------------------------------------------------------------
-
-interface ElkEdgeData {
-  points: ElkPoint[];
-}
-
-function ElkEdge({ id, data, markerEnd, style, animated }: EdgeProps) {
-  const edgeData = data as ElkEdgeData | undefined;
-  const points = edgeData?.points ?? [];
-  if (points.length < 2) return null;
-  return (
-    <BaseEdge
-      id={id}
-      path={bendPointsToSvgPath(points)}
-      markerEnd={markerEnd}
-      style={style}
-      className={animated ? "react-flow__edge-path animated" : undefined}
-    />
-  );
-}
-
-const edgeTypes: EdgeTypes = { elk: ElkEdge };
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -339,6 +235,8 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
       position: { x: 0, y: 0 },
     }));
 
+    // React Flow default edge type = bezier curves. Same shape the
+    // auto-agent admin DAG uses; reads as a normal node graph.
     const edges: Edge[] = dependencies.map((dep, i) => {
       const sourceTask = tasksById.get(dep.depends_on_task_id);
       const targetTask = tasksById.get(dep.task_id);
@@ -349,8 +247,6 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
         id: `e-${i}`,
         source: dep.depends_on_task_id,
         target: dep.task_id,
-        // Custom edge — renders the path ELK computed (SPLINES routing).
-        type: "elk",
         animated: targetTask?.status === "in_progress",
         style: {
           stroke: color,
@@ -369,19 +265,11 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
     layoutWithElk(nodes, edges)
       .then((result) => {
         if (cancelled) return;
-        // Attach each edge's bend points (from ELK) to its data so the
-        // custom ElkEdge component can draw the right path.
-        const edgesWithPoints = edges.map((e) => ({
-          ...e,
-          data: { points: result.edgePoints.get(e.id) ?? [] },
-        }));
-        setLayout({ nodes: result.nodes, edges: edgesWithPoints, height: result.height });
+        setLayout({ nodes: result.nodes, edges, height: result.height });
       })
       .catch((err) => {
         console.error("ELK layout failed", err);
         if (cancelled) return;
-        // Fallback: render nodes stacked vertically so the page is still
-        // usable if layout fails for some reason.
         const fallback = nodes.map((n, i) => ({
           ...n,
           position: { x: 0, y: i * (NODE_HEIGHT + 20) },
@@ -405,8 +293,6 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
   }
 
   if (!layout) {
-    // ELK is still computing — keep the container at a reasonable size so
-    // the page doesn't jump when the diagram appears.
     return (
       <div className="flex items-center justify-center w-full h-[400px] rounded-lg border bg-background text-muted-foreground text-sm">
         Laying out graph…
@@ -423,7 +309,6 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
         nodes={layout.nodes}
         edges={layout.edges}
         nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
         onNodeClick={handleNodeClick}
         fitView
         fitViewOptions={{ padding: 0.2 }}
