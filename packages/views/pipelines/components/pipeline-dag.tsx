@@ -1,14 +1,12 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useMemo } from "react";
 import {
   ReactFlow,
   type Node,
   type Edge,
   Background,
   Controls,
-  useNodesState,
-  useEdgesState,
   MarkerType,
   type NodeProps,
   Handle,
@@ -26,10 +24,10 @@ import "@xyflow/react/dist/style.css";
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 72;
 
-function layoutDag(nodes: Node[], edges: Edge[]) {
+function layoutDag(nodes: Node[], edges: Edge[]): { nodes: Node[]; height: number } {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 60 });
+  g.setGraph({ rankdir: "TB", nodesep: 60, ranksep: 80 });
 
   nodes.forEach((node) => {
     g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
@@ -41,16 +39,17 @@ function layoutDag(nodes: Node[], edges: Edge[]) {
 
   dagre.layout(g);
 
-  return nodes.map((node) => {
+  const layoutedNodes = nodes.map((node) => {
     const pos = g.node(node.id);
     return {
       ...node,
-      position: {
-        x: pos.x - NODE_WIDTH / 2,
-        y: pos.y - NODE_HEIGHT / 2,
-      },
+      position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 },
+      sourcePosition: Position.Bottom,
+      targetPosition: Position.Top,
     };
   });
+
+  return { nodes: layoutedNodes, height: g.graph().height ?? 0 };
 }
 
 function TaskNode({ data }: NodeProps) {
@@ -67,13 +66,9 @@ function TaskNode({ data }: NodeProps) {
       >
         <div className="flex items-center gap-2 mb-1">
           <div className={cn("size-2 rounded-full", cfg.iconColor.replace("text-", "bg-"))} />
-          <span className="text-xs text-muted-foreground font-mono">
-            #{task.number}
-          </span>
+          <span className="text-xs text-muted-foreground font-mono">#{task.number}</span>
         </div>
-        <p className="text-sm font-medium leading-tight line-clamp-2">
-          {task.title}
-        </p>
+        <p className="text-sm font-medium leading-tight line-clamp-2">{task.title}</p>
       </AppLink>
       <Handle type="source" position={Position.Bottom} className="!bg-border" />
     </div>
@@ -88,40 +83,30 @@ interface PipelineDagProps {
 }
 
 export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
-  const initialNodes: Node[] = useMemo(
-    () =>
-      tasks.map((task) => ({
-        id: task.id,
-        type: "task",
-        data: { task },
-        position: { x: 0, y: 0 },
-      })),
-    [tasks],
-  );
+  const { layoutedNodes, layoutedEdges, graphHeight } = useMemo(() => {
+    const nodes: Node[] = tasks.map((task) => ({
+      id: task.id,
+      type: "task",
+      data: { task },
+      position: { x: 0, y: 0 },
+    }));
 
-  const initialEdges: Edge[] = useMemo(
-    () =>
-      dependencies.map((dep, i) => ({
-        id: `e-${i}`,
-        source: dep.depends_on_task_id,
-        target: dep.task_id,
-        markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
-        style: { stroke: "var(--border)" },
-      })),
-    [dependencies],
-  );
+    const edges: Edge[] = dependencies.map((dep, i) => ({
+      id: `e-${i}`,
+      source: dep.depends_on_task_id,
+      target: dep.task_id,
+      style: { stroke: "var(--border)", strokeWidth: 2 },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: "var(--border)",
+        width: 16,
+        height: 16,
+      },
+    }));
 
-  const layoutedNodes = useMemo(
-    () => layoutDag(initialNodes, initialEdges),
-    [initialNodes, initialEdges],
-  );
-
-  const [nodes, , onNodesChange] = useNodesState(layoutedNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
-
-  const onInit = useCallback((instance: { fitView: () => void }) => {
-    setTimeout(() => instance.fitView(), 0);
-  }, []);
+    const { nodes: laidOut, height } = layoutDag(nodes, edges);
+    return { layoutedNodes: laidOut, layoutedEdges: edges, graphHeight: height };
+  }, [tasks, dependencies]);
 
   if (tasks.length === 0) {
     return (
@@ -132,23 +117,25 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
   }
 
   return (
-    <div className="h-[400px] w-full rounded-lg border bg-background">
+    <div
+      className="w-full rounded-lg border bg-background"
+      style={{ height: Math.max(240, graphHeight + 80) }}
+    >
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        nodes={layoutedNodes}
+        edges={layoutedEdges}
         nodeTypes={nodeTypes}
-        onInit={onInit}
         fitView
+        fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
-        panOnDrag
-        zoomOnScroll
+        zoomOnDoubleClick={false}
+        minZoom={0.5}
+        maxZoom={1.5}
       >
-        <Background gap={16} size={1} />
+        <Background gap={20} size={1} />
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>
