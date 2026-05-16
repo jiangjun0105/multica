@@ -5,6 +5,9 @@ import {
   ReactFlow,
   type Node,
   type Edge,
+  type EdgeProps,
+  type EdgeTypes,
+  BaseEdge,
   Background,
   Controls,
   MarkerType,
@@ -104,14 +107,22 @@ const ELK_LAYOUT_OPTIONS: Record<string, string> = {
   "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
   "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
   "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
-  "elk.edgeRouting": "ORTHOGONAL",
+  // SPLINES: curved orthogonal routing — edges follow the same lanes as
+  // ORTHOGONAL would, but with smooth bends instead of hard right angles.
+  // Reads as organic without losing the structure ELK assigned.
+  "elk.edgeRouting": "SPLINES",
   "elk.layered.mergeEdges": "true",
 };
+
+interface ElkPoint {
+  x: number;
+  y: number;
+}
 
 async function layoutWithElk(
   nodes: Node[],
   edges: Edge[],
-): Promise<{ nodes: Node[]; height: number }> {
+): Promise<{ nodes: Node[]; edgePoints: Map<string, ElkPoint[]>; height: number }> {
   const elkGraph: ElkNode = {
     id: "root",
     layoutOptions: ELK_LAYOUT_OPTIONS,
@@ -136,6 +147,20 @@ async function layoutWithElk(
     }
   }
 
+  // Capture per-edge bend points so the custom edge renderer can draw the
+  // exact path ELK computed (rather than React Flow drawing its own).
+  const edgePoints = new Map<string, ElkPoint[]>();
+  for (const e of result.edges ?? []) {
+    const section = e.sections?.[0];
+    if (!section) continue;
+    const pts: ElkPoint[] = [
+      { x: section.startPoint.x, y: section.startPoint.y },
+      ...(section.bendPoints ?? []).map((p) => ({ x: p.x, y: p.y })),
+      { x: section.endPoint.x, y: section.endPoint.y },
+    ];
+    edgePoints.set(e.id, pts);
+  }
+
   const laidOut = nodes.map((node) => ({
     ...node,
     position: positionsById.get(node.id) ?? { x: 0, y: 0 },
@@ -143,7 +168,32 @@ async function layoutWithElk(
     targetPosition: Position.Top,
   }));
 
-  return { nodes: laidOut, height: result.height ?? 0 };
+  return { nodes: laidOut, edgePoints, height: result.height ?? 0 };
+}
+
+// Build a smooth SVG path from ELK's bend points using Catmull-Rom-style
+// cubic Beziers. Looks more organic than a polyline but stays in the lanes
+// ELK chose.
+function bendPointsToSvgPath(points: ElkPoint[]): string {
+  if (points.length < 2) return "";
+  if (points.length === 2) {
+    return `M ${points[0]!.x},${points[0]!.y} L ${points[1]!.x},${points[1]!.y}`;
+  }
+  const tension = 0.5;
+  const p = (i: number) => points[Math.max(0, Math.min(points.length - 1, i))]!;
+  let d = `M ${p(0).x},${p(0).y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = p(i - 1);
+    const p1 = p(i);
+    const p2 = p(i + 1);
+    const p3 = p(i + 2);
+    const cp1x = p1.x + ((p2.x - p0.x) / 6) * tension;
+    const cp1y = p1.y + ((p2.y - p0.y) / 6) * tension;
+    const cp2x = p2.x - ((p3.x - p1.x) / 6) * tension;
+    const cp2y = p2.y - ((p3.y - p1.y) / 6) * tension;
+    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+  return d;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +247,32 @@ function TaskNode({ data }: NodeProps) {
 const nodeTypes = { task: TaskNode };
 
 // ---------------------------------------------------------------------------
+// Custom edge — draws the path ELK computed (instead of React Flow's
+// built-in smoothstep/bezier ignoring it).
+// ---------------------------------------------------------------------------
+
+interface ElkEdgeData {
+  points: ElkPoint[];
+}
+
+function ElkEdge({ id, data, markerEnd, style, animated }: EdgeProps) {
+  const edgeData = data as ElkEdgeData | undefined;
+  const points = edgeData?.points ?? [];
+  if (points.length < 2) return null;
+  return (
+    <BaseEdge
+      id={id}
+      path={bendPointsToSvgPath(points)}
+      markerEnd={markerEnd}
+      style={style}
+      className={animated ? "react-flow__edge-path animated" : undefined}
+    />
+  );
+}
+
+const edgeTypes: EdgeTypes = { elk: ElkEdge };
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -244,10 +320,8 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
         id: `e-${i}`,
         source: dep.depends_on_task_id,
         target: dep.task_id,
-        // React Flow's smoothstep complements ELK's orthogonal placement
-        // — ELK has aligned the nodes so the edges have natural lanes.
-        type: "smoothstep",
-        pathOptions: { borderRadius: 12, offset: 20 },
+        // Custom edge — renders the path ELK computed (SPLINES routing).
+        type: "elk",
         animated: targetTask?.status === "in_progress",
         style: {
           stroke: color,
@@ -266,7 +340,13 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
     layoutWithElk(nodes, edges)
       .then((result) => {
         if (cancelled) return;
-        setLayout({ nodes: result.nodes, edges, height: result.height });
+        // Attach each edge's bend points (from ELK) to its data so the
+        // custom ElkEdge component can draw the right path.
+        const edgesWithPoints = edges.map((e) => ({
+          ...e,
+          data: { points: result.edgePoints.get(e.id) ?? [] },
+        }));
+        setLayout({ nodes: result.nodes, edges: edgesWithPoints, height: result.height });
       })
       .catch((err) => {
         console.error("ELK layout failed", err);
@@ -314,6 +394,7 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
         nodes={layout.nodes}
         edges={layout.edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodeClick={handleNodeClick}
         fitView
         fitViewOptions={{ padding: 0.2 }}
