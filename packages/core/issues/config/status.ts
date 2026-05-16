@@ -28,6 +28,9 @@ export const ALL_STATUSES: IssueStatus[] = [
 
 /** Statuses shown as board columns (excludes cancelled). */
 export const BOARD_STATUSES: IssueStatus[] = [
+  "open",
+  "triaging",
+  "triaged",
   "backlog",
   "todo",
   "in_progress",
