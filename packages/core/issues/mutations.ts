@@ -534,3 +534,25 @@ export function useStartTriage() {
     },
   });
 }
+
+export function useFinalizeTriageProposal() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceId();
+  return useMutation({
+    mutationFn: ({
+      issueId,
+      proposalId,
+    }: {
+      issueId: string;
+      proposalId: string;
+    }) => api.finalizeTriageProposal(issueId, proposalId),
+    onSuccess: (_data, { issueId }) => {
+      qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, issueId) });
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.children(wsId, issueId) });
+      qc.invalidateQueries({
+        queryKey: issueKeys.triageProposals(issueId),
+      });
+    },
+  });
+}

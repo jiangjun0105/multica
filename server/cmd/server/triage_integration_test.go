@@ -557,3 +557,111 @@ func TestStartTriage_NonExistentIssue(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+// --- GetTriageSession endpoint tests -----------------------------------------
+
+func TestGetTriageSession(t *testing.T) {
+	issueID := createTestIssueForTriage(t)
+	agentID := getFirstAgentID(t)
+
+	// Start triage to create a session
+	resp := authRequest(t, "POST", "/api/issues/"+issueID+"/triage", map[string]any{
+		"agent_id": agentID,
+	})
+	if resp.StatusCode != 201 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("StartTriage: expected 201, got %d: %s", resp.StatusCode, body)
+	}
+	var startResult map[string]any
+	readJSON(t, resp, &startResult)
+	expectedSessionID := startResult["chat_session"].(map[string]any)["id"]
+
+	// Get the triage session
+	resp = authRequest(t, "GET", "/api/issues/"+issueID+"/triage/session", nil)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("GetTriageSession: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var session map[string]any
+	readJSON(t, resp, &session)
+
+	if session["id"] != expectedSessionID {
+		t.Fatalf("expected session ID %s, got %s", expectedSessionID, session["id"])
+	}
+}
+
+func TestGetTriageSession_NoSession(t *testing.T) {
+	issueID := createTestIssueForTriage(t)
+
+	resp := authRequest(t, "GET", "/api/issues/"+issueID+"/triage/session", nil)
+	if resp.StatusCode != 404 {
+		resp.Body.Close()
+		t.Fatalf("expected 404 when no triage session exists, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// --- ListTriageProposals endpoint tests --------------------------------------
+
+func TestListTriageProposals(t *testing.T) {
+	issueID := createTestIssueForTriage(t)
+
+	// Create a proposal
+	resp := authRequest(t, "POST", "/api/issues/"+issueID+"/triage/proposal", map[string]any{
+		"tasks": []map[string]any{
+			{"title": "Task A", "description": "Desc A", "priority": "high"},
+			{"title": "Task B", "description": "Desc B", "priority": "medium"},
+		},
+	})
+	if resp.StatusCode != 201 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("CreateTriageProposal: expected 201, got %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	// List proposals
+	resp = authRequest(t, "GET", "/api/issues/"+issueID+"/triage/proposals", nil)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("ListTriageProposals: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var result map[string]any
+	readJSON(t, resp, &result)
+
+	proposals, ok := result["proposals"].([]any)
+	if !ok {
+		t.Fatal("expected proposals array in response")
+	}
+	if len(proposals) != 1 {
+		t.Fatalf("expected 1 proposal, got %d", len(proposals))
+	}
+	proposal := proposals[0].(map[string]any)
+	if proposal["status"] != "pending" {
+		t.Fatalf("expected pending status, got %s", proposal["status"])
+	}
+}
+
+func TestListTriageProposals_Empty(t *testing.T) {
+	issueID := createTestIssueForTriage(t)
+
+	resp := authRequest(t, "GET", "/api/issues/"+issueID+"/triage/proposals", nil)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("ListTriageProposals: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var result map[string]any
+	readJSON(t, resp, &result)
+
+	proposals, ok := result["proposals"].([]any)
+	if !ok {
+		t.Fatal("expected proposals array in response")
+	}
+	if len(proposals) != 0 {
+		t.Fatalf("expected 0 proposals, got %d", len(proposals))
+	}
+}

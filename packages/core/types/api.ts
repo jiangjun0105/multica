@@ -78,6 +78,58 @@ export interface StartTriageResponse {
   created: boolean;
 }
 
+export interface TriageProposedTask {
+  title: string;
+  description: string;
+  priority: string;
+  suitability?: string;
+  manual_test?: string;
+  dependencies?: TriageProposedDependency[];
+}
+
+export interface TriageProposedDependency {
+  ref_index: number;
+  type: "blocks" | "blocked_by" | "related";
+}
+
+export interface TriageProposal {
+  id: string;
+  issue_id: string;
+  workspace_id: string;
+  status: "pending" | "approved" | "rejected";
+  proposed_by_type: string;
+  proposed_by_id: string;
+  proposal: TriageProposedTask[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListTriageProposalsResponse {
+  proposals: TriageProposal[];
+}
+
+export interface TriageFinalizeResponse {
+  proposal: TriageProposal;
+  tasks: TriageFinalizedTask[];
+}
+
+export interface TriageFinalizedTask {
+  id: string;
+  workspace_id: string;
+  number: number;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  suitability?: string;
+  manual_test?: string;
+  issue_id?: string;
+  creator_type: string;
+  creator_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UpdateMeRequest {
   name?: string;
   avatar_url?: string;

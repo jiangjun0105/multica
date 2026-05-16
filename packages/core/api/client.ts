@@ -77,6 +77,8 @@ import type {
   CreateAutopilotTriggerRequest,
   UpdateAutopilotTriggerRequest,
   StartTriageResponse,
+  ListTriageProposalsResponse,
+  TriageFinalizeResponse,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import { type Logger, noopLogger } from "../logger";
@@ -1147,6 +1149,21 @@ export class ApiClient {
     return this.fetch(`/api/issues/${issueId}/triage`, {
       method: "POST",
       body: JSON.stringify({ agent_id: agentId }),
+    });
+  }
+
+  async getTriageSession(issueId: string): Promise<import("../types").ChatSession> {
+    return this.fetch(`/api/issues/${issueId}/triage/session`);
+  }
+
+  async listTriageProposals(issueId: string): Promise<ListTriageProposalsResponse> {
+    return this.fetch(`/api/issues/${issueId}/triage/proposals`);
+  }
+
+  async finalizeTriageProposal(issueId: string, proposalId: string): Promise<TriageFinalizeResponse> {
+    return this.fetch(`/api/issues/${issueId}/triage/finalize`, {
+      method: "POST",
+      body: JSON.stringify({ proposal_id: proposalId }),
     });
   }
 

@@ -28,6 +28,10 @@ export const issueKeys = {
    *  the global WS task: prefix path so any task lifecycle event refreshes
    *  every per-issue list, regardless of which issue is currently mounted. */
   tasksAll: () => ["issues", "tasks"] as const,
+  triageProposals: (issueId: string) =>
+    ["issues", "triage-proposals", issueId] as const,
+  triageSession: (issueId: string) =>
+    ["issues", "triage-session", issueId] as const,
 };
 
 export type MyIssuesFilter = Pick<
@@ -154,5 +158,24 @@ export function issueUsageOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.usage(issueId),
     queryFn: () => api.getIssueUsage(issueId),
+  });
+}
+
+export function triageSessionOptions(issueId: string) {
+  return queryOptions({
+    queryKey: issueKeys.triageSession(issueId),
+    queryFn: () => api.getTriageSession(issueId),
+    enabled: !!issueId,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+export function triageProposalsOptions(issueId: string) {
+  return queryOptions({
+    queryKey: issueKeys.triageProposals(issueId),
+    queryFn: () => api.listTriageProposals(issueId).then((r) => r.proposals),
+    enabled: !!issueId,
+    staleTime: Infinity,
   });
 }
