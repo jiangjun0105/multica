@@ -58,17 +58,20 @@ function TaskNode({ data }: NodeProps) {
   const cfg = TASK_STATUS_CONFIG[task.status];
 
   return (
-    <div className="rounded-lg border bg-card shadow-sm">
+    <div
+      className="w-[240px] rounded-lg border bg-card shadow-sm overflow-hidden"
+      style={{ height: NODE_HEIGHT }}
+    >
       <Handle type="target" position={Position.Top} className="!bg-border" />
       <AppLink
         href={paths.taskDetail(task.id)}
-        className="block p-3 hover:bg-accent/50 rounded-lg transition-colors"
+        className="block size-full p-3 hover:bg-accent/50 rounded-lg transition-colors"
       >
         <div className="flex items-center gap-2 mb-1">
-          <div className={cn("size-2 rounded-full", cfg.iconColor.replace("text-", "bg-"))} />
+          <div className={cn("size-2 rounded-full shrink-0", cfg.iconColor.replace("text-", "bg-"))} />
           <span className="text-xs text-muted-foreground font-mono">#{task.number}</span>
         </div>
-        <p className="text-sm font-medium leading-tight line-clamp-2">{task.title}</p>
+        <p className="text-sm font-medium leading-tight line-clamp-2 break-words">{task.title}</p>
       </AppLink>
       <Handle type="source" position={Position.Bottom} className="!bg-border" />
     </div>
