@@ -105,8 +105,8 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
         id: `e-${i}`,
         source: dep.depends_on_task_id,
         target: dep.task_id,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: "hsl(var(--border))" },
+        markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
+        style: { stroke: "var(--border)" },
       })),
     [dependencies],
   );
