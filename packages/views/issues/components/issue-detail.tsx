@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  Crosshair,
   MoreHorizontal,
   PanelRight,
   Pin,
@@ -59,6 +60,7 @@ import { useIssueSubscribers } from "../hooks/use-issue-subscribers";
 import { ReactionBar } from "@multica/ui/components/common/reaction-bar";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { api } from "@multica/core/api";
+import { useStartTriage } from "@multica/core/issues/mutations";
 import { useModalStore } from "@multica/core/modals";
 import { timeAgo } from "@multica/core/utils";
 import { cn } from "@multica/ui/lib/utils";
@@ -360,6 +362,12 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   // Called before the `if (!issue)` early return so hook order stays stable.
   const actions = useIssueActions(issue);
   const handleUpdateField = actions.updateField;
+  const startTriageMutation = useStartTriage();
+  const canStartTriage = issue?.status === "open" && agents.length > 0;
+  const handleStartTriage = useCallback(() => {
+    if (!issue || agents.length === 0) return;
+    startTriageMutation.mutate({ issueId: issue.id, agentId: agents[0]!.id });
+  }, [issue, agents, startTriageMutation]);
 
   const handleToggleSidebar = useCallback(() => {
     if (isMobile) {
@@ -616,6 +624,24 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 <TooltipContent side="bottom">Archive</TooltipContent>
               </Tooltip>
             )}
+            {canStartTriage && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      disabled={startTriageMutation.isPending}
+                      onClick={handleStartTriage}
+                    >
+                      <Crosshair />
+                    </Button>
+                  }
+                />
+                <TooltipContent side="bottom">Start triage</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -726,6 +752,18 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             </div>
             {descDragOver && <FileDropOverlay />}
           </div>
+
+          {issue.status === "triaging" && (
+            <div className="mt-6 rounded-lg border border-warning/30 bg-warning/5 p-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-warning">
+                <Crosshair className="h-4 w-4" />
+                Triage in progress
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                An agent is analyzing this issue and will propose a task breakdown.
+              </p>
+            </div>
+          )}
 
           {/* Sub-issues — Linear-style */}
           {childIssues.length === 0 && (

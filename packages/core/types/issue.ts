@@ -1,6 +1,9 @@
 import type { Label } from "./label";
 
 export type IssueStatus =
+  | "open"
+  | "triaging"
+  | "triaged"
   | "backlog"
   | "todo"
   | "in_progress"

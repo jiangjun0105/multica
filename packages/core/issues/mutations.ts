@@ -16,7 +16,7 @@ import {
 } from "./cache-helpers";
 import { useWorkspaceId } from "../hooks";
 import { useRecentIssuesStore } from "./stores";
-import type { Issue, IssueReaction, IssueStatus } from "../types";
+import type { Issue, IssueReaction, IssueStatus, StartTriageResponse } from "../types";
 import type {
   CreateIssueRequest,
   UpdateIssueRequest,
@@ -514,6 +514,23 @@ export function useToggleIssueSubscriber(issueId: string) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: issueKeys.subscribers(issueId) });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Triage
+// ---------------------------------------------------------------------------
+
+export function useStartTriage() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceId();
+  return useMutation({
+    mutationFn: ({ issueId, agentId }: { issueId: string; agentId: string }) =>
+      api.startTriage(issueId, agentId),
+    onSuccess: (_data: StartTriageResponse, { issueId }) => {
+      qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, issueId) });
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
     },
   });
 }

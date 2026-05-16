@@ -1,1 +1,1 @@
-export { TasksPage, TaskStatusIcon, TaskStatusHeading } from "./components";
+export { TasksPage, TaskDetail, TaskStatusIcon, TaskStatusHeading } from "./components";

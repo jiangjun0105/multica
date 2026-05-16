@@ -144,6 +144,9 @@ function CancelledIcon() {
 // ---------------------------------------------------------------------------
 
 const STATUS_RENDERERS: Record<IssueStatus, () => React.ReactNode> = {
+  open: BacklogIcon,
+  triaging: InProgressIcon,
+  triaged: DoneIcon,
   backlog: BacklogIcon,
   todo: TodoIcon,
   in_progress: InProgressIcon,

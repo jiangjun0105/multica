@@ -72,6 +72,12 @@ export interface SearchIssuesResponse {
   total: number;
 }
 
+// Triage API
+export interface StartTriageResponse {
+  chat_session: import("./chat").ChatSession;
+  created: boolean;
+}
+
 export interface UpdateMeRequest {
   name?: string;
   avatar_url?: string;

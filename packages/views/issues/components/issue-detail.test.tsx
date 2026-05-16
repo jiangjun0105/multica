@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Issue, TimelineEntry } from "@multica/core/types";
 
 const mockViewport = vi.hoisted(() => ({ isMobile: false }));
+const mockAgents = vi.hoisted(() => ({ list: [] as any[] }));
 
 vi.mock("@multica/ui/hooks/use-mobile", () => ({
   useIsMobile: () => mockViewport.isMobile,
@@ -59,7 +60,7 @@ vi.mock("@multica/core/workspace/queries", () => ({
   }),
   agentListOptions: () => ({
     queryKey: ["workspaces", "ws-1", "agents"],
-    queryFn: () => Promise.resolve([]),
+    queryFn: () => Promise.resolve(mockAgents.list),
   }),
   assigneeFrequencyOptions: () => ({
     queryKey: ["workspaces", "ws-1", "assignee-frequency"],
@@ -193,6 +194,7 @@ const mockApiObj = vi.hoisted(() => ({
   removeCommentReaction: vi.fn(),
   listMembers: vi.fn().mockResolvedValue([{ user_id: "user-1", name: "Test User", email: "test@test.com", role: "admin" }]),
   listAgents: vi.fn().mockResolvedValue([]),
+  startTriage: vi.fn().mockResolvedValue({ chat_session: { id: "cs-1" }, created: true }),
 }));
 
 vi.mock("@multica/core/api", () => ({
@@ -203,10 +205,13 @@ vi.mock("@multica/core/api", () => ({
 
 // Mock issue config
 vi.mock("@multica/core/issues/config", () => ({
-  ALL_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  ALL_STATUSES: ["open", "triaging", "triaged", "backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
   BOARD_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked"],
-  STATUS_ORDER: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  STATUS_ORDER: ["open", "triaging", "triaged", "backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
   STATUS_CONFIG: {
+    open: { label: "Open", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
+    triaging: { label: "Triaging", iconColor: "text-warning", hoverBg: "hover:bg-warning/10" },
+    triaged: { label: "Triaged", iconColor: "text-success", hoverBg: "hover:bg-success/10" },
     backlog: { label: "Backlog", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
     todo: { label: "Todo", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
     in_progress: { label: "In Progress", iconColor: "text-warning", hoverBg: "hover:bg-warning/10" },
@@ -372,6 +377,7 @@ describe("IssueDetail (shared)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockViewport.isMobile = false;
+    mockAgents.list = [];
     // Default: issue loads successfully
     mockApiObj.getIssue.mockResolvedValue(mockIssue);
     mockApiObj.listTimeline.mockResolvedValue(mockTimeline);
@@ -514,5 +520,47 @@ describe("IssueDetail (shared)", () => {
         expect.objectContaining({ description: "" }),
       );
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Triage
+  // -------------------------------------------------------------------------
+
+  it("shows triage button when issue status is 'open' and agents exist", async () => {
+    mockAgents.list = [{ id: "agent-1", name: "Bot" }];
+    mockApiObj.getIssue.mockResolvedValue({ ...mockIssue, status: "open" });
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(document.querySelector(".lucide-crosshair")).toBeInTheDocument();
+    });
+  });
+
+  it("hides triage button when issue status is not 'open'", async () => {
+    mockAgents.list = [{ id: "agent-1", name: "Bot" }];
+    mockApiObj.getIssue.mockResolvedValue({ ...mockIssue, status: "in_progress" });
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Implement authentication")).toBeInTheDocument();
+    });
+
+    expect(document.querySelector(".lucide-crosshair")).not.toBeInTheDocument();
+  });
+
+  it("shows triaging placeholder card when issue status is 'triaging'", async () => {
+    mockApiObj.getIssue.mockResolvedValue({ ...mockIssue, status: "triaging" });
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Triage in progress")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText("An agent is analyzing this issue and will propose a task breakdown."),
+    ).toBeInTheDocument();
   });
 });

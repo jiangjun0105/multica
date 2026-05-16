@@ -77,4 +77,5 @@ export type {
   ListPlanningTasksResponse,
   PlanningTaskStatusBucket,
   ListPlanningTasksCache,
+  TaskDependency,
 } from "./planning-task";

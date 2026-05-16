@@ -67,6 +67,7 @@ import type {
   UpdatePlanningTaskRequest,
   ListPlanningTasksParams,
   ListPlanningTasksResponse,
+  TaskDependency,
   Autopilot,
   CreateAutopilotRequest,
   UpdateAutopilotRequest,
@@ -75,6 +76,7 @@ import type {
   ListAutopilotRunsResponse,
   CreateAutopilotTriggerRequest,
   UpdateAutopilotTriggerRequest,
+  StartTriageResponse,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import { type Logger, noopLogger } from "../logger";
@@ -1133,6 +1135,19 @@ export class ApiClient {
 
   async deletePlanningTask(id: string): Promise<void> {
     await this.fetch(`/api/tasks/${id}`, { method: "DELETE" });
+  }
+
+  async listPlanningTaskDependencies(id: string): Promise<TaskDependency[]> {
+    const res: { dependencies: TaskDependency[] } = await this.fetch(`/api/tasks/${id}/dependencies`);
+    return res.dependencies;
+  }
+
+  // Triage
+  async startTriage(issueId: string, agentId: string): Promise<StartTriageResponse> {
+    return this.fetch(`/api/issues/${issueId}/triage`, {
+      method: "POST",
+      body: JSON.stringify({ agent_id: agentId }),
+    });
   }
 
   // Autopilots

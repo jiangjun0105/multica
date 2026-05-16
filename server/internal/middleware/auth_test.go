@@ -13,9 +13,9 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// newRedisTestClient connects to REDIS_TEST_URL, flushes, and skips when
-// unset — same gating pattern the rest of the suite uses for Redis-backed
-// tests, so `go test ./...` works on a stock laptop without a Redis.
+// newRedisTestClient connects to REDIS_TEST_URL on DB 2 (not the default
+// DB from the URL) so middleware tests don't race with auth package tests
+// that FlushDB on the same Redis instance during parallel `go test ./...`.
 func newRedisTestClient(t *testing.T) *redis.Client {
 	t.Helper()
 	url := os.Getenv("REDIS_TEST_URL")
@@ -26,6 +26,7 @@ func newRedisTestClient(t *testing.T) *redis.Client {
 	if err != nil {
 		t.Fatalf("parse REDIS_TEST_URL: %v", err)
 	}
+	opts.DB = 2
 	rdb := redis.NewClient(opts)
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {

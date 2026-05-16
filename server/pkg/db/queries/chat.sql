@@ -120,3 +120,14 @@ WHERE id = $1;
 -- unread boundary stable across multiple incoming replies.
 UPDATE chat_session SET unread_since = now()
 WHERE id = $1 AND unread_since IS NULL;
+
+-- name: GetTriageChatSessionByIssue :one
+SELECT * FROM chat_session
+WHERE issue_id = $1 AND kind = 'triage' AND status = 'active'
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- name: CreateTriageChatSession :one
+INSERT INTO chat_session (workspace_id, agent_id, creator_id, title, kind, issue_id, runtime_id)
+VALUES ($1, $2, $3, $4, 'triage', $5, (SELECT runtime_id FROM agent WHERE id = $2))
+RETURNING *;

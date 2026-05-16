@@ -77,3 +77,9 @@ export interface PlanningTaskStatusBucket {
 export interface ListPlanningTasksCache {
   byStatus: Partial<Record<PlanningTaskStatus, PlanningTaskStatusBucket>>;
 }
+
+export interface TaskDependency {
+  task_id: string;
+  depends_on_task_id: string;
+  type: "blocks" | "blocked_by" | "related";
+}

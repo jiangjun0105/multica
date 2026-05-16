@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 import { IssueDetailPage } from "./pages/issue-detail-page";
+import { TaskDetailPage } from "./pages/task-detail-page";
 import { SkillDetailPage } from "./pages/skill-detail-page";
 import { AgentDetailPage } from "./pages/agent-detail-page";
 import { RuntimeDetailPage } from "./pages/runtime-detail-page";
@@ -90,6 +91,11 @@ export const appRoutes: RouteObject[] = [
             path: "tasks",
             element: <TasksPage />,
             handle: { title: "Tasks" },
+          },
+          {
+            path: "tasks/:id",
+            element: <TaskDetailPage />,
+            handle: { title: "Task" },
           },
           {
             path: "my-issues",
