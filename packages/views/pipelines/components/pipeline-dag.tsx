@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ReactFlow,
   type Node,
@@ -12,7 +12,7 @@ import {
   Handle,
   Position,
 } from "@xyflow/react";
-import dagre from "@dagrejs/dagre";
+import ELK, { type ElkNode, type ElkExtendedEdge } from "elkjs/lib/elk.bundled.js";
 import { CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import type { PlanningTask, PlanningTaskStatus, TaskDependency } from "@multica/core/types";
@@ -25,10 +25,7 @@ const NODE_WIDTH = 240;
 const NODE_HEIGHT = 76;
 
 // ---------------------------------------------------------------------------
-// Status visuals — DAG-local. Mirrors auto-agent admin DAGStepNode so the
-// two pipelines look the same. Pending+draft uses a quieter treatment than
-// pending+ready so reviewers can tell "still being planned" from "ready to
-// run".
+// Status visuals (unchanged)
 // ---------------------------------------------------------------------------
 
 const STATUS_LABEL: Record<PlanningTaskStatus, string> = {
@@ -50,7 +47,6 @@ const STATUS_BG: Record<PlanningTaskStatus, string> = {
 const DRAFT_BG =
   "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900";
 
-// Edge stroke color reflects the source (prerequisite) task's status.
 const STATUS_EDGE: Record<PlanningTaskStatus, string> = {
   done: "#10b981",
   in_progress: "#3b82f6",
@@ -87,46 +83,67 @@ function edgeColorFor(task: PlanningTask | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
-// Layout
+// Layout — ELK
+//
+// ELK gives much better placement and routing than dagre for DAGs with many
+// cross-rank edges. We use the 'layered' algorithm with BRANDES_KOEPF node
+// placement (aligns nodes along their longest connected paths) and
+// ORTHOGONAL edge routing.
+//
+// ELK is async: layout(graph) returns a promise. We run it in a useEffect
+// and keep the laid-out nodes in state.
 // ---------------------------------------------------------------------------
 
-function layoutDag(nodes: Node[], edges: Edge[]): { nodes: Node[]; height: number } {
-  const g = new dagre.graphlib.Graph();
-  g.setDefaultEdgeLabel(() => ({}));
-  // ranker='tight-tree' picks ranks that keep edges short; align='UL'
-  // anchors sibling nodes to the upper-left of their rank instead of
-  // centering them. Combined, children tend to sit directly under their
-  // parent's edge, which makes the edge "lanes" line up vertically and
-  // cuts down on the diagonal cross-rank arcs that look messy.
-  g.setGraph({
-    rankdir: "TB",
-    align: "UL",
-    ranker: "tight-tree",
-    nodesep: 60,
-    ranksep: 80,
-  });
+const elk = new ELK();
 
-  nodes.forEach((node) => {
-    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
-  });
+const ELK_LAYOUT_OPTIONS: Record<string, string> = {
+  "elk.algorithm": "layered",
+  "elk.direction": "DOWN",
+  "elk.layered.spacing.nodeNodeBetweenLayers": "80",
+  "elk.spacing.nodeNode": "40",
+  "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+  "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
+  "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
+  "elk.edgeRouting": "ORTHOGONAL",
+  "elk.layered.mergeEdges": "true",
+};
 
-  edges.forEach((edge) => {
-    g.setEdge(edge.source, edge.target);
-  });
+async function layoutWithElk(
+  nodes: Node[],
+  edges: Edge[],
+): Promise<{ nodes: Node[]; height: number }> {
+  const elkGraph: ElkNode = {
+    id: "root",
+    layoutOptions: ELK_LAYOUT_OPTIONS,
+    children: nodes.map((n) => ({
+      id: n.id,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+    })),
+    edges: edges.map<ElkExtendedEdge>((e) => ({
+      id: e.id,
+      sources: [e.source],
+      targets: [e.target],
+    })),
+  };
 
-  dagre.layout(g);
+  const result = await elk.layout(elkGraph);
 
-  const layoutedNodes = nodes.map((node) => {
-    const pos = g.node(node.id);
-    return {
-      ...node,
-      position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 },
-      sourcePosition: Position.Bottom,
-      targetPosition: Position.Top,
-    };
-  });
+  const positionsById = new Map<string, { x: number; y: number }>();
+  for (const child of result.children ?? []) {
+    if (child.x != null && child.y != null) {
+      positionsById.set(child.id, { x: child.x, y: child.y });
+    }
+  }
 
-  return { nodes: layoutedNodes, height: g.graph().height ?? 0 };
+  const laidOut = nodes.map((node) => ({
+    ...node,
+    position: positionsById.get(node.id) ?? { x: 0, y: 0 },
+    sourcePosition: Position.Bottom,
+    targetPosition: Position.Top,
+  }));
+
+  return { nodes: laidOut, height: result.height ?? 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -138,10 +155,6 @@ function TaskNode({ data }: NodeProps) {
   const paths = useWorkspacePaths();
   const isRunning = task.status === "in_progress";
 
-  // The card is wrapped in an <a> so right-click → "open in new tab" works.
-  // Single-click navigation is handled by ReactFlow's onNodeClick — relying
-  // on the link alone is unreliable inside React Flow because pointer events
-  // around the <Handle> regions can swallow the click.
   return (
     <>
       <Handle type="target" position={Position.Top} className="!bg-stone-400 !w-2 !h-2" />
@@ -192,9 +205,16 @@ interface PipelineDagProps {
   dependencies: TaskDependency[];
 }
 
+interface LayoutResult {
+  nodes: Node[];
+  edges: Edge[];
+  height: number;
+}
+
 export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
   const paths = useWorkspacePaths();
   const { push } = useNavigation();
+  const [layout, setLayout] = useState<LayoutResult | null>(null);
 
   const handleNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -203,7 +223,8 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
     [push, paths],
   );
 
-  const { layoutedNodes, layoutedEdges, graphHeight } = useMemo(() => {
+  useEffect(() => {
+    let cancelled = false;
     const tasksById = new Map(tasks.map((t) => [t.id, t]));
 
     const nodes: Node[] = tasks.map((task) => ({
@@ -213,11 +234,6 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
       position: { x: 0, y: 0 },
     }));
 
-    // Edge styling is driven by the *source* task:
-    //   - transition_mode 'manual' → dashed (waiting for a human to advance)
-    //   - transition_mode 'auto'   → solid  (downstream unblocks automatically)
-    //   - stroke color reflects the source task's status (green if done, ...)
-    //   - animated when the target is currently running
     const edges: Edge[] = dependencies.map((dep, i) => {
       const sourceTask = tasksById.get(dep.depends_on_task_id);
       const targetTask = tasksById.get(dep.task_id);
@@ -228,10 +244,10 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
         id: `e-${i}`,
         source: dep.depends_on_task_id,
         target: dep.task_id,
-        // Single-axis curves — tighter than the default bezier (which
-        // arcs across multiple ranks and tangles), still curved rather
-        // than orthogonal.
-        type: "simplebezier",
+        // React Flow's smoothstep complements ELK's orthogonal placement
+        // — ELK has aligned the nodes so the edges have natural lanes.
+        type: "smoothstep",
+        pathOptions: { borderRadius: 12, offset: 20 },
         animated: targetTask?.status === "in_progress",
         style: {
           stroke: color,
@@ -247,8 +263,28 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
       };
     });
 
-    const { nodes: laidOut, height } = layoutDag(nodes, edges);
-    return { layoutedNodes: laidOut, layoutedEdges: edges, graphHeight: height };
+    layoutWithElk(nodes, edges)
+      .then((result) => {
+        if (cancelled) return;
+        setLayout({ nodes: result.nodes, edges, height: result.height });
+      })
+      .catch((err) => {
+        console.error("ELK layout failed", err);
+        if (cancelled) return;
+        // Fallback: render nodes stacked vertically so the page is still
+        // usable if layout fails for some reason.
+        const fallback = nodes.map((n, i) => ({
+          ...n,
+          position: { x: 0, y: i * (NODE_HEIGHT + 20) },
+          sourcePosition: Position.Bottom,
+          targetPosition: Position.Top,
+        }));
+        setLayout({ nodes: fallback, edges, height: nodes.length * (NODE_HEIGHT + 20) });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [tasks, dependencies]);
 
   if (tasks.length === 0) {
@@ -259,14 +295,24 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
     );
   }
 
+  if (!layout) {
+    // ELK is still computing — keep the container at a reasonable size so
+    // the page doesn't jump when the diagram appears.
+    return (
+      <div className="flex items-center justify-center w-full h-[400px] rounded-lg border bg-background text-muted-foreground text-sm">
+        Laying out graph…
+      </div>
+    );
+  }
+
   return (
     <div
       className="w-full rounded-lg border bg-background"
-      style={{ height: Math.max(240, graphHeight + 80) }}
+      style={{ height: Math.max(240, layout.height + 80) }}
     >
       <ReactFlow
-        nodes={layoutedNodes}
-        edges={layoutedEdges}
+        nodes={layout.nodes}
+        edges={layout.edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
         fitView
