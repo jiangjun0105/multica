@@ -1,6 +1,9 @@
 import type { IssueStatus } from "../../types";
 
 export const STATUS_ORDER: IssueStatus[] = [
+  "open",
+  "triaging",
+  "triaged",
   "backlog",
   "todo",
   "in_progress",
@@ -11,6 +14,9 @@ export const STATUS_ORDER: IssueStatus[] = [
 ];
 
 export const ALL_STATUSES: IssueStatus[] = [
+  "open",
+  "triaging",
+  "triaged",
   "backlog",
   "todo",
   "in_progress",
@@ -40,6 +46,9 @@ export const STATUS_CONFIG: Record<
     columnBg: string;
   }
 > = {
+  open: { label: "Open", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent", dividerColor: "bg-muted-foreground/40", columnBg: "bg-muted/40" },
+  triaging: { label: "Triaging", iconColor: "text-warning", hoverBg: "hover:bg-warning/10", dividerColor: "bg-warning", columnBg: "bg-warning/5" },
+  triaged: { label: "Triaged", iconColor: "text-success", hoverBg: "hover:bg-success/10", dividerColor: "bg-success", columnBg: "bg-success/5" },
   backlog: { label: "Backlog", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent", dividerColor: "bg-muted-foreground/40", columnBg: "bg-muted/40" },
   todo: { label: "Todo", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent", dividerColor: "bg-muted-foreground/40", columnBg: "bg-muted/40" },
   in_progress: { label: "In Progress", iconColor: "text-warning", hoverBg: "hover:bg-warning/10", dividerColor: "bg-warning", columnBg: "bg-warning/5" },

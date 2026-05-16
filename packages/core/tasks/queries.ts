@@ -11,6 +11,8 @@ export const planningTaskKeys = {
   list: (wsId: string) => [...planningTaskKeys.all(wsId), "list"] as const,
   detail: (wsId: string, id: string) =>
     [...planningTaskKeys.all(wsId), "detail", id] as const,
+  dependencies: (wsId: string, id: string) =>
+    [...planningTaskKeys.all(wsId), "dependencies", id] as const,
 };
 
 export const TASK_PAGE_SIZE = 50;
@@ -52,6 +54,13 @@ export function planningTaskDetailOptions(wsId: string, id: string) {
   return queryOptions({
     queryKey: planningTaskKeys.detail(wsId, id),
     queryFn: () => api.getPlanningTask(id),
+  });
+}
+
+export function planningTaskDependenciesOptions(wsId: string, id: string) {
+  return queryOptions({
+    queryKey: planningTaskKeys.dependencies(wsId, id),
+    queryFn: () => api.listPlanningTaskDependencies(id),
   });
 }
 

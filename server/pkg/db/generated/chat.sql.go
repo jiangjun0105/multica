@@ -149,6 +149,48 @@ func (q *Queries) CreateChatTask(ctx context.Context, arg CreateChatTaskParams) 
 	return i, err
 }
 
+const createTriageChatSession = `-- name: CreateTriageChatSession :one
+INSERT INTO chat_session (workspace_id, agent_id, creator_id, title, kind, issue_id, runtime_id)
+VALUES ($1, $2, $3, $4, 'triage', $5, (SELECT runtime_id FROM agent WHERE id = $2))
+RETURNING id, workspace_id, agent_id, creator_id, title, session_id, work_dir, status, created_at, updated_at, unread_since, runtime_id, kind, issue_id
+`
+
+type CreateTriageChatSessionParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	AgentID     pgtype.UUID `json:"agent_id"`
+	CreatorID   pgtype.UUID `json:"creator_id"`
+	Title       string      `json:"title"`
+	IssueID     pgtype.UUID `json:"issue_id"`
+}
+
+func (q *Queries) CreateTriageChatSession(ctx context.Context, arg CreateTriageChatSessionParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, createTriageChatSession,
+		arg.WorkspaceID,
+		arg.AgentID,
+		arg.CreatorID,
+		arg.Title,
+		arg.IssueID,
+	)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.AgentID,
+		&i.CreatorID,
+		&i.Title,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UnreadSince,
+		&i.RuntimeID,
+		&i.Kind,
+		&i.IssueID,
+	)
+	return i, err
+}
+
 const getChatMessage = `-- name: GetChatMessage :one
 SELECT id, chat_session_id, role, content, task_id, created_at, failure_reason, elapsed_ms FROM chat_message
 WHERE id = $1
@@ -278,6 +320,35 @@ func (q *Queries) GetPendingChatTask(ctx context.Context, chatSessionID pgtype.U
 	row := q.db.QueryRow(ctx, getPendingChatTask, chatSessionID)
 	var i GetPendingChatTaskRow
 	err := row.Scan(&i.ID, &i.Status, &i.CreatedAt)
+	return i, err
+}
+
+const getTriageChatSessionByIssue = `-- name: GetTriageChatSessionByIssue :one
+SELECT id, workspace_id, agent_id, creator_id, title, session_id, work_dir, status, created_at, updated_at, unread_since, runtime_id, kind, issue_id FROM chat_session
+WHERE issue_id = $1 AND kind = 'triage' AND status = 'active'
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetTriageChatSessionByIssue(ctx context.Context, issueID pgtype.UUID) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, getTriageChatSessionByIssue, issueID)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.AgentID,
+		&i.CreatorID,
+		&i.Title,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UnreadSince,
+		&i.RuntimeID,
+		&i.Kind,
+		&i.IssueID,
+	)
 	return i, err
 }
 

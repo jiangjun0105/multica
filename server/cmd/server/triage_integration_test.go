@@ -24,6 +24,7 @@ func createTestIssueForTriage(t *testing.T) string {
 	readJSON(t, resp, &issue)
 	issueID := issue["id"].(string)
 	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM chat_session WHERE issue_id = $1`, issueID)
 		testPool.Exec(context.Background(), `DELETE FROM triage_proposal WHERE issue_id = $1`, issueID)
 		testPool.Exec(context.Background(), `DELETE FROM task_dependency WHERE task_id IN (SELECT id FROM task WHERE issue_id = $1)`, issueID)
 		testPool.Exec(context.Background(), `DELETE FROM task WHERE issue_id = $1`, issueID)
@@ -438,4 +439,121 @@ func TestFinalizeTriageProposal_DefaultPriority(t *testing.T) {
 	if task0["priority"] != "medium" {
 		t.Fatalf("expected default priority 'medium', got '%s'", task0["priority"])
 	}
+}
+
+// --- StartTriage endpoint tests -----------------------------------------------
+
+// getFirstAgentID returns the ID of the first agent in the test workspace.
+func getFirstAgentID(t *testing.T) string {
+	t.Helper()
+	resp := authRequest(t, "GET", "/api/agents?workspace_id="+testWorkspaceID, nil)
+	var agents []map[string]any
+	readJSON(t, resp, &agents)
+	if len(agents) == 0 {
+		t.Skip("no agents in test workspace — skipping triage test")
+	}
+	return agents[0]["id"].(string)
+}
+
+func TestStartTriage(t *testing.T) {
+	issueID := createTestIssueForTriage(t)
+	agentID := getFirstAgentID(t)
+
+	resp := authRequest(t, "POST", "/api/issues/"+issueID+"/triage", map[string]any{
+		"agent_id": agentID,
+	})
+	if resp.StatusCode != 201 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("StartTriage: expected 201, got %d: %s", resp.StatusCode, body)
+	}
+
+	var result map[string]any
+	readJSON(t, resp, &result)
+
+	if result["created"] != true {
+		t.Fatalf("expected created=true, got %v", result["created"])
+	}
+
+	cs, ok := result["chat_session"].(map[string]any)
+	if !ok {
+		t.Fatal("expected chat_session in response")
+	}
+	if cs["id"] == nil || cs["id"] == "" {
+		t.Fatal("expected chat_session to have an id")
+	}
+
+	// Issue status should be "triaging"
+	resp = authRequest(t, "GET", "/api/issues/"+issueID, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("GetIssue: expected 200, got %d", resp.StatusCode)
+	}
+	var issue map[string]any
+	readJSON(t, resp, &issue)
+	if issue["status"] != "triaging" {
+		t.Fatalf("expected issue status 'triaging', got '%s'", issue["status"])
+	}
+}
+
+func TestStartTriage_Idempotent(t *testing.T) {
+	issueID := createTestIssueForTriage(t)
+	agentID := getFirstAgentID(t)
+
+	// First call creates
+	resp := authRequest(t, "POST", "/api/issues/"+issueID+"/triage", map[string]any{
+		"agent_id": agentID,
+	})
+	if resp.StatusCode != 201 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("first StartTriage: expected 201, got %d: %s", resp.StatusCode, body)
+	}
+	var first map[string]any
+	readJSON(t, resp, &first)
+	firstSessionID := first["chat_session"].(map[string]any)["id"]
+
+	// Second call returns existing
+	resp = authRequest(t, "POST", "/api/issues/"+issueID+"/triage", map[string]any{
+		"agent_id": agentID,
+	})
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("second StartTriage: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var second map[string]any
+	readJSON(t, resp, &second)
+
+	if second["created"] != false {
+		t.Fatalf("expected created=false on repeat call, got %v", second["created"])
+	}
+	secondSessionID := second["chat_session"].(map[string]any)["id"]
+	if firstSessionID != secondSessionID {
+		t.Fatalf("expected same session ID, got %s vs %s", firstSessionID, secondSessionID)
+	}
+}
+
+func TestStartTriage_MissingAgentID(t *testing.T) {
+	issueID := createTestIssueForTriage(t)
+
+	resp := authRequest(t, "POST", "/api/issues/"+issueID+"/triage", map[string]any{})
+	if resp.StatusCode != 400 {
+		resp.Body.Close()
+		t.Fatalf("expected 400 for missing agent_id, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestStartTriage_NonExistentIssue(t *testing.T) {
+	agentID := getFirstAgentID(t)
+	fakeUUID := "00000000-0000-0000-0000-000000000000"
+
+	resp := authRequest(t, "POST", "/api/issues/"+fakeUUID+"/triage", map[string]any{
+		"agent_id": agentID,
+	})
+	if resp.StatusCode != 404 {
+		resp.Body.Close()
+		t.Fatalf("expected 404 for non-existent issue, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
 }

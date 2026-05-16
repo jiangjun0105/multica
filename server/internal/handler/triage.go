@@ -2,11 +2,13 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -117,6 +119,111 @@ func planTaskToResponse(t db.Task) TaskResponse {
 }
 
 // --- Handlers ----------------------------------------------------------------
+
+type StartTriageRequest struct {
+	AgentID string `json:"agent_id"`
+}
+
+type StartTriageResponse struct {
+	ChatSession ChatSessionResponse `json:"chat_session"`
+	Created     bool                `json:"created"`
+}
+
+// StartTriage creates a triage chat session for an issue and marks the issue
+// status as "triaging". Idempotent: repeat calls return the existing session.
+//
+// POST /api/issues/{id}/triage
+func (h *Handler) StartTriage(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	issue, ok := h.loadIssueForUser(w, r, id)
+	if !ok {
+		return
+	}
+
+	var req StartTriageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.AgentID == "" {
+		writeError(w, http.StatusBadRequest, "agent_id is required")
+		return
+	}
+
+	agentUUID, ok := parseUUIDOrBadRequest(w, req.AgentID, "agent_id")
+	if !ok {
+		return
+	}
+
+	workspaceID := ctxWorkspaceID(r.Context())
+	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace_id")
+	if !ok {
+		return
+	}
+
+	agent, err := h.Queries.GetAgentInWorkspace(r.Context(), db.GetAgentInWorkspaceParams{
+		ID:          agentUUID,
+		WorkspaceID: wsUUID,
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	if agent.ArchivedAt.Valid {
+		writeError(w, http.StatusBadRequest, "agent is archived")
+		return
+	}
+
+	existing, err := h.Queries.GetTriageChatSessionByIssue(r.Context(), issue.ID)
+	if err == nil {
+		writeJSON(w, http.StatusOK, StartTriageResponse{
+			ChatSession: chatSessionToResponse(existing),
+			Created:     false,
+		})
+		return
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		slog.Warn("get triage chat session failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to check existing triage session")
+		return
+	}
+
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	session, err := h.Queries.CreateTriageChatSession(r.Context(), db.CreateTriageChatSessionParams{
+		WorkspaceID: wsUUID,
+		AgentID:     agentUUID,
+		CreatorID:   parseUUID(userID),
+		Title:       "Triage: " + issue.Title,
+		IssueID:     issue.ID,
+	})
+	if err != nil {
+		slog.Warn("create triage chat session failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to create triage session")
+		return
+	}
+
+	updatedIssue, err := h.Queries.UpdateIssueStatus(r.Context(), db.UpdateIssueStatusParams{
+		ID:     issue.ID,
+		Status: "triaging",
+	})
+	if err != nil {
+		slog.Warn("update issue status to triaging failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to update issue status")
+		return
+	}
+
+	actorType, actorID := h.resolveActor(r, userID, workspaceID)
+	h.publish(protocol.EventIssueUpdated, workspaceID, actorType, actorID, issueToResponse(updatedIssue, h.getIssuePrefix(r.Context(), issue.WorkspaceID)))
+
+	writeJSON(w, http.StatusCreated, StartTriageResponse{
+		ChatSession: chatSessionToResponse(session),
+		Created:     true,
+	})
+}
 
 // CreateTriageProposal persists a triage agent's proposed task breakdown for
 // an issue. Called by the AutoAgent submit_plan tool.
