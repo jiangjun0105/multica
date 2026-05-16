@@ -86,11 +86,15 @@ const (
 	EventInvitationRevoked  = "invitation:revoked"
 
 	// Planning-task events (the "task" planning table, not task_run).
-	EventPlanningTaskCreated   = "planning_task:created"
-	EventPlanningTaskUpdated   = "planning_task:updated"
-	EventPlanningTaskDeleted   = "planning_task:deleted"
+	EventPlanningTaskCreated    = "planning_task:created"
+	EventPlanningTaskUpdated    = "planning_task:updated"
+	EventPlanningTaskDeleted    = "planning_task:deleted"
 	EventPlanningTaskDispatched = "planning_task:dispatched"
-	EventPlanningTaskCancelled = "planning_task:cancelled"
+	EventPlanningTaskCancelled  = "planning_task:cancelled"
+
+	// Pipeline events
+	EventPipelineCreated = "pipeline:created"
+	EventPipelineUpdated = "pipeline:updated"
 
 	// Daemon events
 	EventDaemonHeartbeat     = "daemon:heartbeat"

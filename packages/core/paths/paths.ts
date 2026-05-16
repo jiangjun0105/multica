@@ -32,6 +32,8 @@ function workspaceScoped(slug: string) {
     runtimeDetail: (id: string) => `${ws}/runtimes/${encode(id)}`,
     tasks: () => `${ws}/tasks`,
     taskDetail: (id: string) => `${ws}/tasks/${encode(id)}`,
+    pipelines: () => `${ws}/pipelines`,
+    pipelineDetail: (id: string) => `${ws}/pipelines/${encode(id)}`,
     skills: () => `${ws}/skills`,
     skillDetail: (id: string) => `${ws}/skills/${encode(id)}`,
     settings: () => `${ws}/settings`,

@@ -1,0 +1,3 @@
+DROP INDEX IF EXISTS idx_task_pipeline;
+ALTER TABLE task DROP COLUMN IF EXISTS pipeline_id;
+DROP TABLE IF EXISTS pipeline;

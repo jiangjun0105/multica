@@ -186,6 +186,18 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
             )}
           </div>
 
+          {task.pipeline_id && (
+            <div className="mt-6">
+              <AppLink
+                href={paths.pipelineDetail(task.pipeline_id)}
+                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+              >
+                <GitBranch className="h-3 w-3" />
+                View pipeline &rarr;
+              </AppLink>
+            </div>
+          )}
+
           {task.manual_test && (
             <div className="mt-6">
               <h4 className="text-xs font-medium text-muted-foreground mb-1">Manual test</h4>

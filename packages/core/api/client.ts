@@ -68,6 +68,9 @@ import type {
   ListPlanningTasksParams,
   ListPlanningTasksResponse,
   TaskDependency,
+  Pipeline,
+  ListPipelinesParams,
+  ListPipelinesResponse,
   Autopilot,
   CreateAutopilotRequest,
   UpdateAutopilotRequest,
@@ -1142,6 +1145,22 @@ export class ApiClient {
   async listPlanningTaskDependencies(id: string): Promise<TaskDependency[]> {
     const res: { dependencies: TaskDependency[] } = await this.fetch(`/api/tasks/${id}/dependencies`);
     return res.dependencies;
+  }
+
+  // Pipelines
+  async listPipelines(params?: ListPipelinesParams): Promise<ListPipelinesResponse> {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset) search.set("offset", String(params.offset));
+    return this.fetch(`/api/pipelines?${search}`);
+  }
+
+  async getPipeline(id: string): Promise<Pipeline> {
+    return this.fetch(`/api/pipelines/${id}`);
+  }
+
+  async cancelPipeline(id: string): Promise<Pipeline> {
+    return this.fetch(`/api/pipelines/${id}/cancel`, { method: "POST" });
   }
 
   // Triage

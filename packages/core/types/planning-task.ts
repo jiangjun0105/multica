@@ -27,6 +27,7 @@ export interface PlanningTask {
   manual_test?: string | null;
   issue_id?: string | null;
   current_run_id?: string | null;
+  pipeline_id?: string | null;
   creator_type: string;
   creator_id: string;
   created_at: string;

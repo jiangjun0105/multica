@@ -29,6 +29,7 @@ import {
   SquarePen,
   CircleUser,
   X,
+  GitBranch,
 } from "lucide-react";
 import { WorkspaceAvatar } from "../workspace/workspace-avatar";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
@@ -98,6 +99,7 @@ type NavKey =
   | "myIssues"
   | "issues"
   | "tasks"
+  | "pipelines"
   | "agents"
   | "skills"
   | "settings";
@@ -110,6 +112,7 @@ const personalNav: { key: NavKey; label: string; icon: typeof Inbox }[] = [
 const workspaceNav: { key: NavKey; label: string; icon: typeof Inbox }[] = [
   { key: "issues", label: "Issues", icon: ListTodo },
   { key: "tasks", label: "Tasks", icon: ClipboardList },
+  { key: "pipelines", label: "Pipelines", icon: GitBranch },
   { key: "agents", label: "Agents", icon: Bot },
 ];
 

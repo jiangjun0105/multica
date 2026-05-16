@@ -13,6 +13,8 @@ import { AgentDetailPage } from "./pages/agent-detail-page";
 import { RuntimeDetailPage } from "./pages/runtime-detail-page";
 import { IssuesPage } from "@multica/views/issues/components";
 import { TasksPage } from "@multica/views/tasks";
+import { PipelinesPage } from "@multica/views/pipelines";
+import { PipelineDetailPage } from "./pages/pipeline-detail-page";
 import { MyIssuesPage } from "@multica/views/my-issues";
 import { SkillsPage } from "@multica/views/skills";
 import { DesktopRuntimesPage } from "./components/desktop-runtimes-page";
@@ -96,6 +98,16 @@ export const appRoutes: RouteObject[] = [
             path: "tasks/:id",
             element: <TaskDetailPage />,
             handle: { title: "Task" },
+          },
+          {
+            path: "pipelines",
+            element: <PipelinesPage />,
+            handle: { title: "Pipelines" },
+          },
+          {
+            path: "pipelines/:id",
+            element: <PipelineDetailPage />,
+            handle: { title: "Pipeline" },
           },
           {
             path: "my-issues",
