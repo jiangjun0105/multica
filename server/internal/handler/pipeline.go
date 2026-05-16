@@ -120,6 +120,10 @@ func (h *Handler) GetPipeline(w http.ResponseWriter, r *http.Request) {
 //
 // GET /api/pipelines
 func (h *Handler) ListPipelines(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireUserID(w, r); !ok {
+		return
+	}
+
 	workspaceID := h.resolveWorkspaceID(r)
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace_id")
 	if !ok {
@@ -279,32 +283,29 @@ func (h *Handler) recomputePipelineStatus(r *http.Request, pipelineID string) {
 }
 
 func rollupPipelineStatus(tasks []db.Task) string {
-	allDone := true
-	anyFailed := false
-	anyRunning := false
+	var doneCount, cancelledCount, runningCount int
 
 	for _, t := range tasks {
 		switch t.Status {
 		case "done":
-			// ok
+			doneCount++
 		case "cancelled":
-			anyFailed = true
-			allDone = false
+			cancelledCount++
 		case "in_progress":
-			anyRunning = true
-			allDone = false
-		default:
-			allDone = false
+			runningCount++
 		}
 	}
 
-	if allDone {
+	terminal := doneCount + cancelledCount
+	allTerminal := terminal == len(tasks)
+
+	if allTerminal && cancelledCount == len(tasks) {
+		return "cancelled"
+	}
+	if allTerminal {
 		return "completed"
 	}
-	if anyFailed && !anyRunning {
-		return "failed"
-	}
-	if anyRunning {
+	if runningCount > 0 {
 		return "running"
 	}
 	return "pending"
