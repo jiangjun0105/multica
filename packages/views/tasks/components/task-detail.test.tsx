@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PlanningTask, TaskDependency } from "@multica/core/types";
 
@@ -98,6 +99,14 @@ vi.mock("@multica/core/tasks/config", () => ({
 
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock("./task-conversation-overlay", () => ({
+  TaskConversationOverlay: ({ taskRunId, onClose }: { taskRunId: string; onClose: () => void }) => (
+    <div data-testid="conversation-overlay" data-run-id={taskRunId}>
+      <button onClick={onClose}>Close overlay</button>
+    </div>
+  ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -299,5 +308,94 @@ describe("TaskDetail", () => {
 
     const btn = screen.getByText("Dispatch").closest("button");
     expect(btn).toBeDisabled();
+  });
+
+  it("renders branch as a clickable link when PR URL is a GitHub URL", async () => {
+    renderTaskDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/login")).toBeInTheDocument();
+    });
+
+    const branchLink = screen.getByText("feat/login").closest("a");
+    expect(branchLink).not.toBeNull();
+    expect(branchLink).toHaveAttribute(
+      "href",
+      "https://github.com/org/repo/tree/feat%2Flogin",
+    );
+    expect(branchLink).toHaveAttribute("target", "_blank");
+  });
+
+  it("renders branch as plain text when PR URL is not a GitHub URL", async () => {
+    mockGetPlanningTask.mockResolvedValue({
+      ...mockTask,
+      pr: "https://gitlab.com/org/repo/merge_requests/1",
+    });
+
+    renderTaskDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/login")).toBeInTheDocument();
+    });
+
+    const branchEl = screen.getByText("feat/login");
+    expect(branchEl.tagName).toBe("SPAN");
+  });
+
+  it("renders branch as plain text when PR URL is absent", async () => {
+    mockGetPlanningTask.mockResolvedValue({ ...mockTask, pr: null });
+
+    renderTaskDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/login")).toBeInTheDocument();
+    });
+
+    const branchEl = screen.getByText("feat/login");
+    expect(branchEl.tagName).toBe("SPAN");
+  });
+
+  it("shows Execution log button when current_run_id is present", async () => {
+    renderTaskDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Execution log")).toBeInTheDocument();
+    });
+  });
+
+  it("does not show Execution log button when no current_run_id", async () => {
+    mockGetPlanningTask.mockResolvedValue({ ...mockTask, current_run_id: null });
+
+    renderTaskDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Dispatch")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Execution log")).not.toBeInTheDocument();
+  });
+
+  it("toggles conversation overlay when Execution log button is clicked", async () => {
+    const user = userEvent.setup();
+    renderTaskDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Execution log")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("conversation-overlay")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("Execution log"));
+
+    expect(screen.getByTestId("conversation-overlay")).toBeInTheDocument();
+    expect(screen.getByTestId("conversation-overlay")).toHaveAttribute(
+      "data-run-id",
+      "run-abc",
+    );
+    expect(screen.getByText("Hide log")).toBeInTheDocument();
+
+    await user.click(screen.getByText("Hide log"));
+
+    expect(screen.queryByTestId("conversation-overlay")).not.toBeInTheDocument();
   });
 });
