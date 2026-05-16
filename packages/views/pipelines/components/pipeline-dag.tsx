@@ -137,7 +137,6 @@ function TaskNode({ data }: NodeProps) {
           backgroundFor(task),
           isRunning && "ring-2 ring-blue-300/50 dark:ring-blue-700/50",
         )}
-        style={{ height: NODE_HEIGHT }}
       >
         <div className="flex items-center gap-2">
           <StatusIcon status={task.status} />
