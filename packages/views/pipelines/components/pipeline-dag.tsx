@@ -102,16 +102,29 @@ const elk = new ELK();
 const ELK_LAYOUT_OPTIONS: Record<string, string> = {
   "elk.algorithm": "layered",
   "elk.direction": "DOWN",
-  "elk.layered.spacing.nodeNodeBetweenLayers": "80",
-  "elk.spacing.nodeNode": "40",
+  // Tight spacing — we'd rather scroll a little than waste horizontal
+  // whitespace.
+  "elk.layered.spacing.nodeNodeBetweenLayers": "60",
+  "elk.spacing.nodeNode": "24",
+  "elk.spacing.edgeNode": "20",
+  "elk.spacing.edgeEdge": "12",
+  // NETWORK_SIMPLEX packs nodes tighter than BRANDES_KOEPF (which leaves
+  // gaps to keep edges straight). Combined with post-compaction this
+  // produces a much tighter bounding box and better vertical alignment of
+  // siblings under their parents.
+  "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+  "elk.layered.nodePlacement.favorStraightEdges": "true",
   "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
-  "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
-  "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
-  // SPLINES: curved orthogonal routing — edges follow the same lanes as
-  // ORTHOGONAL would, but with smooth bends instead of hard right angles.
-  // Reads as organic without losing the structure ELK assigned.
+  "elk.layered.crossingMinimization.semiInteractive": "false",
+  // Post-compaction: after placement, slide each component as close to
+  // the others as it can go without colliding.
+  "elk.layered.compaction.postCompaction.strategy": "LEFT_RIGHT_CONNECTION_LOCKING",
+  "elk.layered.compaction.connectedComponents": "true",
   "elk.edgeRouting": "SPLINES",
   "elk.layered.mergeEdges": "true",
+  // Higher thoroughness → more iterations of crossing-min and placement.
+  // 100 is the max useful value; default is 7.
+  "elk.layered.thoroughness": "100",
 };
 
 interface ElkPoint {
