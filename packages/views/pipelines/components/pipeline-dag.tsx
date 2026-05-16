@@ -187,13 +187,16 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
       position: { x: 0, y: 0 },
     }));
 
-    // Pipeline transitions in multica are user-driven (no agent auto-advances
-    // between tasks), so all edges are styled as "manual" — dashed with a
-    // small label, matching the auto-agent admin DAG convention.
+    // Edge styling is driven by the *source* task:
+    //   - transition_mode 'manual' → dashed (waiting for a human to advance)
+    //   - transition_mode 'auto'   → solid  (downstream unblocks automatically)
+    //   - stroke color reflects the source task's status (green if done, ...)
+    //   - animated when the target is currently running
     const edges: Edge[] = dependencies.map((dep, i) => {
       const sourceTask = tasksById.get(dep.depends_on_task_id);
       const targetTask = tasksById.get(dep.task_id);
       const color = edgeColorFor(sourceTask);
+      const isManual = sourceTask?.transition_mode !== "auto";
 
       return {
         id: `e-${i}`,
@@ -203,7 +206,7 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
         style: {
           stroke: color,
           strokeWidth: 2,
-          strokeDasharray: "6 3",
+          strokeDasharray: isManual ? "6 3" : undefined,
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -211,9 +214,6 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
           width: 16,
           height: 16,
         },
-        label: "⏸ manual",
-        labelStyle: { fontSize: 10, fill: "#78716c" },
-        labelBgStyle: { fill: "transparent" },
       };
     });
 

@@ -43,34 +43,36 @@ const createTask = `-- name: CreateTask :one
 INSERT INTO task (
     workspace_id, number, title, description, status, priority,
     suitability, manual_test, issue_id, pipeline_id, creator_type, creator_id,
-    is_draft
+    is_draft, transition_mode
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $9, $10, $11,
     $12, $7, $8,
-    COALESCE($13::boolean, false)
-) RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft
+    COALESCE($13::boolean, false),
+    COALESCE($14::text, 'manual')
+) RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft, transition_mode
 `
 
 type CreateTaskParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Number      int32       `json:"number"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Status      string      `json:"status"`
-	Priority    string      `json:"priority"`
-	CreatorType string      `json:"creator_type"`
-	CreatorID   pgtype.UUID `json:"creator_id"`
-	Suitability pgtype.Text `json:"suitability"`
-	ManualTest  pgtype.Text `json:"manual_test"`
-	IssueID     pgtype.UUID `json:"issue_id"`
-	PipelineID  pgtype.UUID `json:"pipeline_id"`
-	IsDraft     pgtype.Bool `json:"is_draft"`
+	WorkspaceID    pgtype.UUID `json:"workspace_id"`
+	Number         int32       `json:"number"`
+	Title          string      `json:"title"`
+	Description    string      `json:"description"`
+	Status         string      `json:"status"`
+	Priority       string      `json:"priority"`
+	CreatorType    string      `json:"creator_type"`
+	CreatorID      pgtype.UUID `json:"creator_id"`
+	Suitability    pgtype.Text `json:"suitability"`
+	ManualTest     pgtype.Text `json:"manual_test"`
+	IssueID        pgtype.UUID `json:"issue_id"`
+	PipelineID     pgtype.UUID `json:"pipeline_id"`
+	IsDraft        pgtype.Bool `json:"is_draft"`
+	TransitionMode pgtype.Text `json:"transition_mode"`
 }
 
 // Task planning queries (the "task" table — not task_run).
-// is_draft uses COALESCE so callers that haven't been updated to pass the
-// field still get the column default (false). See migration 081.
+// is_draft and transition_mode use COALESCE so older callers (no field
+// passed) get the column defaults. See migrations 081 and 082.
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
 	row := q.db.QueryRow(ctx, createTask,
 		arg.WorkspaceID,
@@ -86,6 +88,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.IssueID,
 		arg.PipelineID,
 		arg.IsDraft,
+		arg.TransitionMode,
 	)
 	var i Task
 	err := row.Scan(
@@ -108,6 +111,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.UpdatedAt,
 		&i.PipelineID,
 		&i.IsDraft,
+		&i.TransitionMode,
 	)
 	return i, err
 }
@@ -166,7 +170,7 @@ func (q *Queries) DeleteTaskDependency(ctx context.Context, arg DeleteTaskDepend
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft FROM task WHERE id = $1
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft, transition_mode FROM task WHERE id = $1
 `
 
 func (q *Queries) GetTask(ctx context.Context, id pgtype.UUID) (Task, error) {
@@ -192,12 +196,13 @@ func (q *Queries) GetTask(ctx context.Context, id pgtype.UUID) (Task, error) {
 		&i.UpdatedAt,
 		&i.PipelineID,
 		&i.IsDraft,
+		&i.TransitionMode,
 	)
 	return i, err
 }
 
 const getTaskInWorkspace = `-- name: GetTaskInWorkspace :one
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft FROM task WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft, transition_mode FROM task WHERE id = $1 AND workspace_id = $2
 `
 
 type GetTaskInWorkspaceParams struct {
@@ -228,6 +233,7 @@ func (q *Queries) GetTaskInWorkspace(ctx context.Context, arg GetTaskInWorkspace
 		&i.UpdatedAt,
 		&i.PipelineID,
 		&i.IsDraft,
+		&i.TransitionMode,
 	)
 	return i, err
 }
@@ -313,7 +319,7 @@ func (q *Queries) ListTaskDependents(ctx context.Context, dependsOnTaskID pgtype
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft FROM task
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft, transition_mode FROM task
 WHERE workspace_id = $1
   AND ($4::text IS NULL OR status = $4)
   AND ($5::text IS NULL OR priority = $5)
@@ -367,6 +373,7 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 			&i.UpdatedAt,
 			&i.PipelineID,
 			&i.IsDraft,
+			&i.TransitionMode,
 		); err != nil {
 			return nil, err
 		}
@@ -393,7 +400,7 @@ UPDATE task SET
     pipeline_id = $13,
     updated_at = now()
 WHERE id = $1 AND workspace_id = $2
-RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft
+RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft, transition_mode
 `
 
 type UpdateTaskParams struct {
@@ -449,6 +456,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.UpdatedAt,
 		&i.PipelineID,
 		&i.IsDraft,
+		&i.TransitionMode,
 	)
 	return i, err
 }
@@ -458,7 +466,7 @@ UPDATE task SET
     status = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft
+RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft, transition_mode
 `
 
 type UpdateTaskStatusParams struct {
@@ -489,6 +497,7 @@ func (q *Queries) UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusPara
 		&i.UpdatedAt,
 		&i.PipelineID,
 		&i.IsDraft,
+		&i.TransitionMode,
 	)
 	return i, err
 }

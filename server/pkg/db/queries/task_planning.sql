@@ -1,17 +1,18 @@
 -- Task planning queries (the "task" table — not task_run).
 
 -- name: CreateTask :one
--- is_draft uses COALESCE so callers that haven't been updated to pass the
--- field still get the column default (false). See migration 081.
+-- is_draft and transition_mode use COALESCE so older callers (no field
+-- passed) get the column defaults. See migrations 081 and 082.
 INSERT INTO task (
     workspace_id, number, title, description, status, priority,
     suitability, manual_test, issue_id, pipeline_id, creator_type, creator_id,
-    is_draft
+    is_draft, transition_mode
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     sqlc.narg('suitability'), sqlc.narg('manual_test'), sqlc.narg('issue_id'),
     sqlc.narg('pipeline_id'), $7, $8,
-    COALESCE(sqlc.narg('is_draft')::boolean, false)
+    COALESCE(sqlc.narg('is_draft')::boolean, false),
+    COALESCE(sqlc.narg('transition_mode')::text, 'manual')
 ) RETURNING *;
 
 -- name: GetTask :one

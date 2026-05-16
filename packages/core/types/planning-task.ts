@@ -31,6 +31,10 @@ export interface PlanningTask {
   // A task is a draft while its plan is being authored; agents do not pick up
   // drafts. Defaults to false. See multica migration 081.
   is_draft: boolean;
+  // How the pipeline advances past this task: 'manual' (default — wait for
+  // human approval) or 'auto' (downstream unblocks as soon as this task
+  // finishes). See multica migration 082.
+  transition_mode: "auto" | "manual";
   creator_type: string;
   creator_id: string;
   created_at: string;

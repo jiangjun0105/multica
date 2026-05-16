@@ -124,13 +124,19 @@ func (h *Handler) GetPipeline(w http.ResponseWriter, r *http.Request) {
 // index produces a `task_dependency` row of type `blocked_by` between the
 // task at index i and the task at the referenced index.
 type CreatePipelineTaskInput struct {
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Status      string  `json:"status"`
-	Priority    string  `json:"priority"`
-	Suitability *string `json:"suitability"`
-	IsDraft     bool    `json:"is_draft"`
-	DependsOn   []int   `json:"depends_on"`
+	Title          string  `json:"title"`
+	Description    string  `json:"description"`
+	Status         string  `json:"status"`
+	Priority       string  `json:"priority"`
+	Suitability    *string `json:"suitability"`
+	IsDraft        bool    `json:"is_draft"`
+	TransitionMode string  `json:"transition_mode"`
+	DependsOn      []int   `json:"depends_on"`
+}
+
+var validTransitionModes = map[string]bool{
+	"auto":   true,
+	"manual": true,
 }
 
 // CreatePipelineRequest is the body for POST /api/pipelines.
@@ -215,6 +221,10 @@ func (h *Handler) CreatePipeline(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid task suitability")
 			return
 		}
+		if t.TransitionMode != "" && !validTransitionModes[t.TransitionMode] {
+			writeError(w, http.StatusBadRequest, "invalid task transition_mode")
+			return
+		}
 		for _, dep := range t.DependsOn {
 			if dep < 0 || dep >= len(req.Tasks) {
 				writeError(w, http.StatusBadRequest, "depends_on index out of range")
@@ -280,19 +290,24 @@ func (h *Handler) CreatePipeline(w http.ResponseWriter, r *http.Request) {
 		if t.Suitability != nil {
 			suitability = pgtype.Text{String: *t.Suitability, Valid: true}
 		}
+		var transitionMode pgtype.Text
+		if t.TransitionMode != "" {
+			transitionMode = pgtype.Text{String: t.TransitionMode, Valid: true}
+		}
 		task, err := qtx.CreateTask(r.Context(), db.CreateTaskParams{
-			WorkspaceID: wsUUID,
-			Number:      firstNumber + int32(i),
-			Title:       t.Title,
-			Description: t.Description,
-			Status:      status,
-			Priority:    priority,
-			Suitability: suitability,
-			IssueID:     issueUUID,
-			PipelineID:  pipeline.ID,
-			CreatorType: actorType,
-			CreatorID:   actorUUID,
-			IsDraft:     pgtype.Bool{Bool: t.IsDraft, Valid: true},
+			WorkspaceID:    wsUUID,
+			Number:         firstNumber + int32(i),
+			Title:          t.Title,
+			Description:    t.Description,
+			Status:         status,
+			Priority:       priority,
+			Suitability:    suitability,
+			IssueID:        issueUUID,
+			PipelineID:     pipeline.ID,
+			CreatorType:    actorType,
+			CreatorID:      actorUUID,
+			IsDraft:        pgtype.Bool{Bool: t.IsDraft, Valid: true},
+			TransitionMode: transitionMode,
 		})
 		if err != nil {
 			slog.Warn("create pipeline task failed", append(logger.RequestAttrs(r), "error", err, "index", i)...)

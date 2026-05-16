@@ -24,6 +24,7 @@ export interface CreatePipelineTaskInput {
   priority?: string;
   suitability?: string | null;
   is_draft?: boolean;
+  transition_mode?: "auto" | "manual";
   // Indices (zero-based) into the same `tasks` array. Each entry creates a
   // task_dependency edge: this task `depends_on` that task.
   depends_on?: number[];
