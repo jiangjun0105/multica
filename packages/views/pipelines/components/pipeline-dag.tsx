@@ -93,7 +93,18 @@ function edgeColorFor(task: PlanningTask | undefined): string {
 function layoutDag(nodes: Node[], edges: Edge[]): { nodes: Node[]; height: number } {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "TB", nodesep: 60, ranksep: 80 });
+  // ranker='tight-tree' picks ranks that keep edges short; align='UL'
+  // anchors sibling nodes to the upper-left of their rank instead of
+  // centering them. Combined, children tend to sit directly under their
+  // parent's edge, which makes the edge "lanes" line up vertically and
+  // cuts down on the diagonal cross-rank arcs that look messy.
+  g.setGraph({
+    rankdir: "TB",
+    align: "UL",
+    ranker: "tight-tree",
+    nodesep: 60,
+    ranksep: 80,
+  });
 
   nodes.forEach((node) => {
     g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
