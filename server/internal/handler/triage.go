@@ -193,7 +193,15 @@ func (h *Handler) StartTriage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.Queries.CreateTriageChatSession(r.Context(), db.CreateTriageChatSessionParams{
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start transaction")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	qtx := h.Queries.WithTx(tx)
+
+	session, err := qtx.CreateTriageChatSession(r.Context(), db.CreateTriageChatSessionParams{
 		WorkspaceID: wsUUID,
 		AgentID:     agentUUID,
 		CreatorID:   parseUUID(userID),
@@ -206,13 +214,19 @@ func (h *Handler) StartTriage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedIssue, err := h.Queries.UpdateIssueStatus(r.Context(), db.UpdateIssueStatusParams{
+	updatedIssue, err := qtx.UpdateIssueStatus(r.Context(), db.UpdateIssueStatusParams{
 		ID:     issue.ID,
 		Status: "triaging",
 	})
 	if err != nil {
 		slog.Warn("update issue status to triaging failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "failed to update issue status")
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		slog.Warn("commit start triage failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to start triage")
 		return
 	}
 

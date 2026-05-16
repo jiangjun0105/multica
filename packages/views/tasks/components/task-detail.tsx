@@ -14,6 +14,7 @@ import { WorkspaceAvatar } from "../../workspace/workspace-avatar";
 import { AppLink } from "../../navigation";
 import { useNavigation } from "../../navigation";
 import { MemoizedMarkdown } from "../../common/markdown";
+import { openExternal } from "../../platform/open-external";
 import { TaskStatusIcon } from "./task-status-icon";
 import { PriorityIcon } from "../../issues/components/priority-icon";
 import { PropRow } from "../../common/prop-row";
@@ -199,7 +200,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
               className="w-full"
               onClick={() => {
                 if (dispatchUrl) {
-                  window.open(dispatchUrl, "_blank");
+                  openExternal(dispatchUrl);
                 }
               }}
               disabled={!dispatchUrl}

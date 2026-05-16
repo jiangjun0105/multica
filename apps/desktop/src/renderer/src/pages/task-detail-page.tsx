@@ -8,7 +8,10 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const wsId = useWorkspaceId();
-  const { data: task } = useQuery(planningTaskDetailOptions(wsId, id!));
+  const { data: task } = useQuery({
+    ...planningTaskDetailOptions(wsId, id ?? ""),
+    enabled: !!id,
+  });
 
   useDocumentTitle(task ? `TASK-${task.number}: ${task.title}` : "Task");
 
