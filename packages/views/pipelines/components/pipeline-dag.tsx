@@ -217,11 +217,10 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
         id: `e-${i}`,
         source: dep.depends_on_task_id,
         target: dep.task_id,
-        // Orthogonal routing with rounded corners — same edges read much
-        // cleaner than bezier curves when many of them cross between
-        // non-adjacent ranks.
-        type: "smoothstep",
-        pathOptions: { borderRadius: 12, offset: 20 },
+        // Single-axis curves — tighter than the default bezier (which
+        // arcs across multiple ranks and tangles), still curved rather
+        // than orthogonal.
+        type: "simplebezier",
         animated: targetTask?.status === "in_progress",
         style: {
           stroke: color,
