@@ -120,7 +120,11 @@ const ELK_LAYOUT_OPTIONS: Record<string, string> = {
   // the others as it can go without colliding.
   "elk.layered.compaction.postCompaction.strategy": "LEFT_RIGHT_CONNECTION_LOCKING",
   "elk.layered.compaction.connectedComponents": "true",
-  "elk.edgeRouting": "SPLINES",
+  // ORTHOGONAL: right-angle routes. Combined with rounded corners in the
+  // custom edge renderer below, this gives clean, predictable lanes. SPLINES
+  // here produced loopy curves because ELK's bend points were too close
+  // together for the smoothing to look graceful.
+  "elk.edgeRouting": "ORTHOGONAL",
   "elk.layered.mergeEdges": "true",
   // Higher thoroughness → more iterations of crossing-min and placement.
   // 100 is the max useful value; default is 7.
@@ -184,28 +188,40 @@ async function layoutWithElk(
   return { nodes: laidOut, edgePoints, height: result.height ?? 0 };
 }
 
-// Build a smooth SVG path from ELK's bend points using Catmull-Rom-style
-// cubic Beziers. Looks more organic than a polyline but stays in the lanes
-// ELK chose.
+// Build an SVG path from ELK's orthogonal bend points, replacing each
+// 90° corner with a small arc of radius `radius` so the path doesn't have
+// pixel-sharp elbows. Falls back to a straight line at any point where
+// the rounding would overshoot a segment.
+const CORNER_RADIUS = 8;
+
 function bendPointsToSvgPath(points: ElkPoint[]): string {
   if (points.length < 2) return "";
   if (points.length === 2) {
     return `M ${points[0]!.x},${points[0]!.y} L ${points[1]!.x},${points[1]!.y}`;
   }
-  const tension = 0.5;
-  const p = (i: number) => points[Math.max(0, Math.min(points.length - 1, i))]!;
-  let d = `M ${p(0).x},${p(0).y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = p(i - 1);
-    const p1 = p(i);
-    const p2 = p(i + 1);
-    const p3 = p(i + 2);
-    const cp1x = p1.x + ((p2.x - p0.x) / 6) * tension;
-    const cp1y = p1.y + ((p2.y - p0.y) / 6) * tension;
-    const cp2x = p2.x - ((p3.x - p1.x) / 6) * tension;
-    const cp2y = p2.y - ((p3.y - p1.y) / 6) * tension;
-    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+
+  let d = `M ${points[0]!.x},${points[0]!.y}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1]!;
+    const curr = points[i]!;
+    const next = points[i + 1]!;
+
+    // Distances along each leg
+    const inLen = Math.hypot(curr.x - prev.x, curr.y - prev.y);
+    const outLen = Math.hypot(next.x - curr.x, next.y - curr.y);
+    const r = Math.min(CORNER_RADIUS, inLen / 2, outLen / 2);
+
+    // Point on the incoming leg, r before the corner
+    const ix = curr.x - ((curr.x - prev.x) / (inLen || 1)) * r;
+    const iy = curr.y - ((curr.y - prev.y) / (inLen || 1)) * r;
+    // Point on the outgoing leg, r after the corner
+    const ox = curr.x + ((next.x - curr.x) / (outLen || 1)) * r;
+    const oy = curr.y + ((next.y - curr.y) / (outLen || 1)) * r;
+
+    d += ` L ${ix},${iy} Q ${curr.x},${curr.y} ${ox},${oy}`;
   }
+  const end = points[points.length - 1]!;
+  d += ` L ${end.x},${end.y}`;
   return d;
 }
 
