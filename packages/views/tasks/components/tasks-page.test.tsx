@@ -34,7 +34,7 @@ vi.mock("@multica/core/paths", async () => {
   };
 });
 
-vi.mock("../../../navigation", () => ({
+vi.mock("../../navigation", () => ({
   AppLink: ({ children, href, ...props }: any) => (
     <a href={href} {...props}>{children}</a>
   ),
