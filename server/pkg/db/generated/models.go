@@ -328,6 +328,7 @@ type Task struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	PipelineID   pgtype.UUID        `json:"pipeline_id"`
+	IsDraft      bool               `json:"is_draft"`
 }
 
 type TaskDependency struct {

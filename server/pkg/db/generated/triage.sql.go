@@ -128,7 +128,7 @@ func (q *Queries) ListTaskDependenciesByTaskIDs(ctx context.Context, dollar_1 []
 }
 
 const listTasksByIssueID = `-- name: ListTasksByIssueID :many
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id FROM task
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft FROM task
 WHERE issue_id = $1
 ORDER BY number ASC
 `
@@ -161,6 +161,7 @@ func (q *Queries) ListTasksByIssueID(ctx context.Context, issueID pgtype.UUID) (
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PipelineID,
+			&i.IsDraft,
 		); err != nil {
 			return nil, err
 		}

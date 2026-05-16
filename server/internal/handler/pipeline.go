@@ -129,6 +129,7 @@ type CreatePipelineTaskInput struct {
 	Status      string  `json:"status"`
 	Priority    string  `json:"priority"`
 	Suitability *string `json:"suitability"`
+	IsDraft     bool    `json:"is_draft"`
 	DependsOn   []int   `json:"depends_on"`
 }
 
@@ -291,6 +292,7 @@ func (h *Handler) CreatePipeline(w http.ResponseWriter, r *http.Request) {
 			PipelineID:  pipeline.ID,
 			CreatorType: actorType,
 			CreatorID:   actorUUID,
+			IsDraft:     pgtype.Bool{Bool: t.IsDraft, Valid: true},
 		})
 		if err != nil {
 			slog.Warn("create pipeline task failed", append(logger.RequestAttrs(r), "error", err, "index", i)...)

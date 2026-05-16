@@ -28,6 +28,9 @@ export interface PlanningTask {
   issue_id?: string | null;
   current_run_id?: string | null;
   pipeline_id?: string | null;
+  // A task is a draft while its plan is being authored; agents do not pick up
+  // drafts. Defaults to false. See multica migration 081.
+  is_draft: boolean;
   creator_type: string;
   creator_id: string;
   created_at: string;
