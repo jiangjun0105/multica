@@ -5,7 +5,9 @@ export type PipelineStatus = "pending" | "running" | "completed" | "failed" | "c
 export interface Pipeline {
   id: string;
   workspace_id: string;
-  issue_id: string;
+  // Optional — a pipeline can be anchored to one issue (the triage flow) or
+  // none (auto-agent bulk imports that span multiple issues).
+  issue_id: string | null;
   status: PipelineStatus;
   creator_type: string;
   creator_id: string;
@@ -13,6 +15,23 @@ export interface Pipeline {
   updated_at: string;
   tasks?: PlanningTask[];
   dependencies?: TaskDependency[];
+}
+
+export interface CreatePipelineTaskInput {
+  title: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  suitability?: string | null;
+  // Indices (zero-based) into the same `tasks` array. Each entry creates a
+  // task_dependency edge: this task `depends_on` that task.
+  depends_on?: number[];
+}
+
+export interface CreatePipelineRequest {
+  issue_id?: string | null;
+  status?: PipelineStatus;
+  tasks: CreatePipelineTaskInput[];
 }
 
 export interface ListPipelinesParams {

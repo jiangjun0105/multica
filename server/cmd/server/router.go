@@ -418,6 +418,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			// Pipelines
 			r.Route("/api/pipelines", func(r chi.Router) {
 				r.Get("/", h.ListPipelines)
+				r.Post("/", h.CreatePipeline)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.GetPipeline)
 					r.Post("/cancel", h.CancelPipeline)

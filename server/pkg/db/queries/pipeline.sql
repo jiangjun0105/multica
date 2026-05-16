@@ -1,6 +1,8 @@
 -- Pipeline queries.
 
 -- name: CreatePipeline :one
+-- IssueID is nullable: pass an invalid pgtype.UUID (Valid=false) to create a
+-- pipeline that is not anchored to any single issue. See migration 080.
 INSERT INTO pipeline (
     workspace_id, issue_id, status, creator_type, creator_id
 ) VALUES ($1, $2, $3, $4, $5)
