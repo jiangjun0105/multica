@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   ReactFlow,
   type Node,
@@ -17,7 +17,7 @@ import { CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import type { PlanningTask, PlanningTaskStatus, TaskDependency } from "@multica/core/types";
 import { useWorkspacePaths } from "@multica/core/paths";
-import { AppLink } from "../../navigation";
+import { useNavigation } from "../../navigation";
 
 import "@xyflow/react/dist/style.css";
 
@@ -127,13 +127,18 @@ function TaskNode({ data }: NodeProps) {
   const paths = useWorkspacePaths();
   const isRunning = task.status === "in_progress";
 
+  // The card is wrapped in an <a> so right-click → "open in new tab" works.
+  // Single-click navigation is handled by ReactFlow's onNodeClick — relying
+  // on the link alone is unreliable inside React Flow because pointer events
+  // around the <Handle> regions can swallow the click.
   return (
     <>
       <Handle type="target" position={Position.Top} className="!bg-stone-400 !w-2 !h-2" />
-      <AppLink
+      <a
         href={paths.taskDetail(task.id)}
+        onClick={(e) => e.preventDefault()}
         className={cn(
-          "block w-[240px] rounded-xl border px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md overflow-hidden",
+          "block w-[240px] rounded-xl border px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md overflow-hidden cursor-pointer",
           backgroundFor(task),
           isRunning && "ring-2 ring-blue-300/50 dark:ring-blue-700/50",
         )}
@@ -159,7 +164,7 @@ function TaskNode({ data }: NodeProps) {
             </div>
           </div>
         </div>
-      </AppLink>
+      </a>
       <Handle type="source" position={Position.Bottom} className="!bg-stone-400 !w-2 !h-2" />
     </>
   );
@@ -177,6 +182,16 @@ interface PipelineDagProps {
 }
 
 export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
+  const paths = useWorkspacePaths();
+  const { push } = useNavigation();
+
+  const handleNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      push(paths.taskDetail(node.id));
+    },
+    [push, paths],
+  );
+
   const { layoutedNodes, layoutedEdges, graphHeight } = useMemo(() => {
     const tasksById = new Map(tasks.map((t) => [t.id, t]));
 
@@ -238,6 +253,7 @@ export function PipelineDag({ tasks, dependencies }: PipelineDagProps) {
         nodes={layoutedNodes}
         edges={layoutedEdges}
         nodeTypes={nodeTypes}
+        onNodeClick={handleNodeClick}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}

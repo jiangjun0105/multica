@@ -28,6 +28,8 @@ function makeTask(
     priority: "medium",
     creator_type: "member",
     creator_id: "user-1",
+    is_draft: false,
+    transition_mode: "manual",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,

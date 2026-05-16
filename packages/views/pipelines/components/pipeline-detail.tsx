@@ -116,26 +116,55 @@ export function PipelineDetail({ pipelineId }: PipelineDetailProps) {
 
         <PipelineDag tasks={tasks} dependencies={dependencies} />
 
-        <div className="space-y-2">
-          <h2 className="text-sm font-medium text-muted-foreground">Tasks</h2>
-          <div className="divide-y rounded-lg border">
-            {tasks.map((task: PlanningTask) => (
-              <AppLink
-                key={task.id}
-                href={paths.taskDetail(task.id)}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors"
-              >
-                <span className="text-xs text-muted-foreground font-mono w-10">
-                  #{task.number}
-                </span>
-                <span className="flex-1 text-sm truncate">{task.title}</span>
-                <span className="text-xs text-muted-foreground capitalize">
-                  {task.status.replace("_", " ")}
-                </span>
-              </AppLink>
-            ))}
-          </div>
-        </div>
+        <PipelineTaskSummary tasks={tasks} />
+      </div>
+    </div>
+  );
+}
+
+interface PipelineTaskSummaryProps {
+  tasks: PlanningTask[];
+}
+
+function PipelineTaskSummary({ tasks }: PipelineTaskSummaryProps) {
+  const total = tasks.length;
+  const running = tasks.filter((t) => t.status === "in_progress").length;
+  const pending = tasks.filter((t) => t.status === "pending").length;
+  const draft = tasks.filter((t) => t.is_draft).length;
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <SummaryStat label="Total" value={total} />
+      <SummaryStat label="Running" value={running} tone="blue" />
+      <SummaryStat label="Pending" value={pending} tone="amber" />
+      <SummaryStat label="Draft" value={draft} tone="muted" />
+    </div>
+  );
+}
+
+function SummaryStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: "blue" | "amber" | "muted";
+}) {
+  const valueClass =
+    tone === "blue"
+      ? "text-blue-600 dark:text-blue-400"
+      : tone === "amber"
+        ? "text-amber-600 dark:text-amber-400"
+        : tone === "muted"
+          ? "text-muted-foreground"
+          : "text-foreground";
+
+  return (
+    <div className="rounded-lg border bg-card px-4 py-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums ${valueClass}`}>
+        {value}
       </div>
     </div>
   );
