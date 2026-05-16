@@ -413,6 +413,15 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
+			// Pipelines
+			r.Route("/api/pipelines", func(r chi.Router) {
+				r.Get("/", h.ListPipelines)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetPipeline)
+					r.Post("/cancel", h.CancelPipeline)
+				})
+			})
+
 			// Planning tasks (the "task" planning table — not task_run)
 			r.Route("/api/tasks", func(r chi.Router) {
 				r.Get("/", h.ListPlanningTasks)

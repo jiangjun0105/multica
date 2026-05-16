@@ -42,12 +42,12 @@ const createTask = `-- name: CreateTask :one
 
 INSERT INTO task (
     workspace_id, number, title, description, status, priority,
-    suitability, manual_test, issue_id, creator_type, creator_id
+    suitability, manual_test, issue_id, pipeline_id, creator_type, creator_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $9, $10, $11,
-    $7, $8
-) RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at
+    $12, $7, $8
+) RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id
 `
 
 type CreateTaskParams struct {
@@ -62,6 +62,7 @@ type CreateTaskParams struct {
 	Suitability pgtype.Text `json:"suitability"`
 	ManualTest  pgtype.Text `json:"manual_test"`
 	IssueID     pgtype.UUID `json:"issue_id"`
+	PipelineID  pgtype.UUID `json:"pipeline_id"`
 }
 
 // Task planning queries (the "task" table — not task_run).
@@ -78,6 +79,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.Suitability,
 		arg.ManualTest,
 		arg.IssueID,
+		arg.PipelineID,
 	)
 	var i Task
 	err := row.Scan(
@@ -98,6 +100,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PipelineID,
 	)
 	return i, err
 }
@@ -156,7 +159,7 @@ func (q *Queries) DeleteTaskDependency(ctx context.Context, arg DeleteTaskDepend
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at FROM task WHERE id = $1
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id FROM task WHERE id = $1
 `
 
 func (q *Queries) GetTask(ctx context.Context, id pgtype.UUID) (Task, error) {
@@ -180,12 +183,13 @@ func (q *Queries) GetTask(ctx context.Context, id pgtype.UUID) (Task, error) {
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PipelineID,
 	)
 	return i, err
 }
 
 const getTaskInWorkspace = `-- name: GetTaskInWorkspace :one
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at FROM task WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id FROM task WHERE id = $1 AND workspace_id = $2
 `
 
 type GetTaskInWorkspaceParams struct {
@@ -214,6 +218,7 @@ func (q *Queries) GetTaskInWorkspace(ctx context.Context, arg GetTaskInWorkspace
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PipelineID,
 	)
 	return i, err
 }
@@ -299,7 +304,7 @@ func (q *Queries) ListTaskDependents(ctx context.Context, dependsOnTaskID pgtype
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at FROM task
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id FROM task
 WHERE workspace_id = $1
   AND ($4::text IS NULL OR status = $4)
   AND ($5::text IS NULL OR priority = $5)
@@ -351,6 +356,7 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 			&i.CreatorID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PipelineID,
 		); err != nil {
 			return nil, err
 		}
@@ -374,9 +380,10 @@ UPDATE task SET
     manual_test = $10,
     issue_id = $11,
     current_run_id = $12,
+    pipeline_id = $13,
     updated_at = now()
 WHERE id = $1 AND workspace_id = $2
-RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at
+RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id
 `
 
 type UpdateTaskParams struct {
@@ -392,6 +399,7 @@ type UpdateTaskParams struct {
 	ManualTest   pgtype.Text `json:"manual_test"`
 	IssueID      pgtype.UUID `json:"issue_id"`
 	CurrentRunID pgtype.UUID `json:"current_run_id"`
+	PipelineID   pgtype.UUID `json:"pipeline_id"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error) {
@@ -408,6 +416,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		arg.ManualTest,
 		arg.IssueID,
 		arg.CurrentRunID,
+		arg.PipelineID,
 	)
 	var i Task
 	err := row.Scan(
@@ -428,6 +437,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PipelineID,
 	)
 	return i, err
 }
@@ -437,7 +447,7 @@ UPDATE task SET
     status = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at
+RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id
 `
 
 type UpdateTaskStatusParams struct {
@@ -466,6 +476,7 @@ func (q *Queries) UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusPara
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PipelineID,
 	)
 	return i, err
 }

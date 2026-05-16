@@ -3,11 +3,11 @@
 -- name: CreateTask :one
 INSERT INTO task (
     workspace_id, number, title, description, status, priority,
-    suitability, manual_test, issue_id, creator_type, creator_id
+    suitability, manual_test, issue_id, pipeline_id, creator_type, creator_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     sqlc.narg('suitability'), sqlc.narg('manual_test'), sqlc.narg('issue_id'),
-    $7, $8
+    sqlc.narg('pipeline_id'), $7, $8
 ) RETURNING *;
 
 -- name: GetTask :one
@@ -44,6 +44,7 @@ UPDATE task SET
     manual_test = sqlc.narg('manual_test'),
     issue_id = sqlc.narg('issue_id'),
     current_run_id = sqlc.narg('current_run_id'),
+    pipeline_id = sqlc.narg('pipeline_id'),
     updated_at = now()
 WHERE id = $1 AND workspace_id = $2
 RETURNING *;

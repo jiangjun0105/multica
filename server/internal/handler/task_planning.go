@@ -34,6 +34,7 @@ type PlanningTaskResponse struct {
 	ManualTest   *string `json:"manual_test,omitempty"`
 	IssueID      *string `json:"issue_id,omitempty"`
 	CurrentRunID *string `json:"current_run_id,omitempty"`
+	PipelineID   *string `json:"pipeline_id,omitempty"`
 	CreatorType  string  `json:"creator_type"`
 	CreatorID    string  `json:"creator_id"`
 	CreatedAt    string  `json:"created_at"`
@@ -55,6 +56,7 @@ func planningTaskToResponse(t db.Task) PlanningTaskResponse {
 		ManualTest:   textToPtr(t.ManualTest),
 		IssueID:      uuidToPtr(t.IssueID),
 		CurrentRunID: uuidToPtr(t.CurrentRunID),
+		PipelineID:   uuidToPtr(t.PipelineID),
 		CreatorType:  t.CreatorType,
 		CreatorID:    uuidToString(t.CreatorID),
 		CreatedAt:    timestampToString(t.CreatedAt),
@@ -406,6 +408,7 @@ func (h *Handler) UpdatePlanningTask(w http.ResponseWriter, r *http.Request) {
 		ManualTest:   prevTask.ManualTest,
 		IssueID:      prevTask.IssueID,
 		CurrentRunID: prevTask.CurrentRunID,
+		PipelineID:   prevTask.PipelineID,
 	}
 
 	if req.Title != nil {
@@ -498,6 +501,10 @@ func (h *Handler) UpdatePlanningTask(w http.ResponseWriter, r *http.Request) {
 	actorType, actorID := h.resolveActor(r, userID, workspaceID)
 	h.publish(protocol.EventPlanningTaskUpdated, workspaceID, actorType, actorID, map[string]any{"task": resp})
 
+	if task.PipelineID.Valid {
+		h.recomputePipelineStatus(r, uuidToString(task.PipelineID))
+	}
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -561,6 +568,10 @@ func (h *Handler) DispatchPlanningTask(w http.ResponseWriter, r *http.Request) {
 	resp := planningTaskToResponse(updated)
 	h.publish(protocol.EventPlanningTaskDispatched, workspaceID, actorType, actorID, map[string]any{"task": resp})
 
+	if updated.PipelineID.Valid {
+		h.recomputePipelineStatus(r, uuidToString(updated.PipelineID))
+	}
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -593,6 +604,10 @@ func (h *Handler) CancelPlanningTask(w http.ResponseWriter, r *http.Request) {
 	resp := planningTaskToResponse(updated)
 	h.publish(protocol.EventPlanningTaskCancelled, workspaceID, actorType, actorID, map[string]any{"task": resp})
 
+	if updated.PipelineID.Valid {
+		h.recomputePipelineStatus(r, uuidToString(updated.PipelineID))
+	}
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -624,6 +639,10 @@ func (h *Handler) RetryPlanningTask(w http.ResponseWriter, r *http.Request) {
 
 	resp := planningTaskToResponse(updated)
 	h.publish(protocol.EventPlanningTaskUpdated, workspaceID, actorType, actorID, map[string]any{"task": resp})
+
+	if updated.PipelineID.Valid {
+		h.recomputePipelineStatus(r, uuidToString(updated.PipelineID))
+	}
 
 	writeJSON(w, http.StatusOK, resp)
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -77,6 +78,7 @@ type DependencyResponse struct {
 type TriageFinalizeResponse struct {
 	Proposal TriageProposalResponse `json:"proposal"`
 	Tasks    []TaskResponse         `json:"tasks"`
+	Pipeline *PipelineResponse      `json:"pipeline,omitempty"`
 }
 
 // --- Helpers -----------------------------------------------------------------
@@ -389,6 +391,7 @@ func (h *Handler) FinalizeTriageProposal(w http.ResponseWriter, r *http.Request)
 
 	var createdTasks []db.Task
 	var createdDeps []db.TaskDependency
+	var createdPipeline *db.Pipeline
 
 	tx, err := h.TxStarter.Begin(r.Context())
 	if err != nil {
@@ -399,6 +402,25 @@ func (h *Handler) FinalizeTriageProposal(w http.ResponseWriter, r *http.Request)
 	qtx := h.Queries.WithTx(tx)
 
 	taskCount := int32(len(proposedTasks))
+
+	var pipelineID pgtype.UUID
+	if taskCount > 1 {
+		p, err := qtx.CreatePipeline(r.Context(), db.CreatePipelineParams{
+			WorkspaceID: wsUUID,
+			IssueID:     issue.ID,
+			Status:      "pending",
+			CreatorType: actorType,
+			CreatorID:   actorUUID,
+		})
+		if err != nil {
+			slog.Warn("create pipeline failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "failed to create pipeline")
+			return
+		}
+		createdPipeline = &p
+		pipelineID = p.ID
+	}
+
 	counterAfter, err := qtx.IncrementTaskCounter(r.Context(), db.IncrementTaskCounterParams{
 		ID:          wsUUID,
 		TaskCounter: taskCount,
@@ -426,6 +448,7 @@ func (h *Handler) FinalizeTriageProposal(w http.ResponseWriter, r *http.Request)
 			Suitability: ptrToText(pt.Suitability),
 			ManualTest:  ptrToText(pt.ManualTest),
 			IssueID:     issue.ID,
+			PipelineID:  pipelineID,
 			CreatorType: actorType,
 			CreatorID:   actorUUID,
 		})
@@ -490,6 +513,10 @@ func (h *Handler) FinalizeTriageProposal(w http.ResponseWriter, r *http.Request)
 
 	h.publish(protocol.EventIssueUpdated, workspaceID, actorType, actorID, issueToResponse(updatedIssue, h.getIssuePrefix(r.Context(), issue.WorkspaceID)))
 
+	if createdPipeline != nil {
+		h.publish(protocol.EventPipelineCreated, workspaceID, actorType, actorID, pipelineToResponse(*createdPipeline))
+	}
+
 	depMap := make(map[string][]DependencyResponse)
 	for _, d := range createdDeps {
 		tid := uuidToString(d.TaskID)
@@ -510,8 +537,14 @@ func (h *Handler) FinalizeTriageProposal(w http.ResponseWriter, r *http.Request)
 	updatedProposal := proposal
 	updatedProposal.Status = "approved"
 
-	writeJSON(w, http.StatusCreated, TriageFinalizeResponse{
+	finalizeResp := TriageFinalizeResponse{
 		Proposal: triageProposalToResponse(updatedProposal),
 		Tasks:    taskResponses,
-	})
+	}
+	if createdPipeline != nil {
+		pr := pipelineToResponse(*createdPipeline)
+		finalizeResp.Pipeline = &pr
+	}
+
+	writeJSON(w, http.StatusCreated, finalizeResp)
 }

@@ -67,6 +67,12 @@ export type {
   ListAutopilotRunsResponse,
 } from "./autopilot";
 export type {
+  Pipeline,
+  PipelineStatus,
+  ListPipelinesParams,
+  ListPipelinesResponse,
+} from "./pipeline";
+export type {
   PlanningTask,
   PlanningTaskStatus,
   PlanningTaskPriority,
