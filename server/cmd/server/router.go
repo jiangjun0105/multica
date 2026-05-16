@@ -316,6 +316,8 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Post("/tasks/{taskId}/cancel", h.CancelTask)
 					r.Post("/rerun", h.RerunIssue)
 					r.Post("/triage", h.StartTriage)
+					r.Get("/triage/session", h.GetTriageSession)
+					r.Get("/triage/proposals", h.ListTriageProposals)
 					r.Post("/triage/proposal", h.CreateTriageProposal)
 					r.Post("/triage/finalize", h.FinalizeTriageProposal)
 					r.Get("/task-runs", h.ListTasksByIssue)

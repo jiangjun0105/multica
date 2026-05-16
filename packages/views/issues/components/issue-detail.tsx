@@ -66,6 +66,7 @@ import { timeAgo } from "@multica/core/utils";
 import { cn } from "@multica/ui/lib/utils";
 
 import { ProgressRing } from "./progress-ring";
+import { TriageChatPanel } from "./triage-chat-panel";
 
 function shortDate(date: string | null): string {
   if (!date) return "—";
@@ -754,15 +755,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
           </div>
 
           {issue.status === "triaging" && (
-            <div className="mt-6 rounded-lg border border-warning/30 bg-warning/5 p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-warning">
-                <Crosshair className="h-4 w-4" />
-                Triage in progress
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                An agent is analyzing this issue and will propose a task breakdown.
-              </p>
-            </div>
+            <TriageChatPanel issueId={issue.id} />
           )}
 
           {/* Sub-issues — Linear-style */}

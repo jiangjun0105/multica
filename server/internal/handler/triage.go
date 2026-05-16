@@ -239,6 +239,56 @@ func (h *Handler) StartTriage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetTriageSession returns the active triage chat session for an issue.
+// Returns 404 if no triage session exists.
+//
+// GET /api/issues/{id}/triage/session
+func (h *Handler) GetTriageSession(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	issue, ok := h.loadIssueForUser(w, r, id)
+	if !ok {
+		return
+	}
+
+	session, err := h.Queries.GetTriageChatSessionByIssue(r.Context(), issue.ID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "no triage session for this issue")
+			return
+		}
+		slog.Warn("get triage session failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to get triage session")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, chatSessionToResponse(session))
+}
+
+// ListTriageProposals returns all triage proposals for an issue, ordered by
+// creation time descending.
+//
+// GET /api/issues/{id}/triage/proposals
+func (h *Handler) ListTriageProposals(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	issue, ok := h.loadIssueForUser(w, r, id)
+	if !ok {
+		return
+	}
+
+	proposals, err := h.Queries.ListTriageProposalsByIssue(r.Context(), issue.ID)
+	if err != nil {
+		slog.Warn("list triage proposals failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to list proposals")
+		return
+	}
+
+	out := make([]TriageProposalResponse, len(proposals))
+	for i, p := range proposals {
+		out[i] = triageProposalToResponse(p)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"proposals": out})
+}
+
 // CreateTriageProposal persists a triage agent's proposed task breakdown for
 // an issue. Called by the AutoAgent submit_plan tool.
 //
