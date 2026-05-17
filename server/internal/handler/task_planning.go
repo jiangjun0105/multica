@@ -34,8 +34,10 @@ type PlanningTaskResponse struct {
 	ManualTest   *string `json:"manual_test,omitempty"`
 	IssueID      *string `json:"issue_id,omitempty"`
 	CurrentRunID *string `json:"current_run_id,omitempty"`
-	PipelineID   *string `json:"pipeline_id,omitempty"`
-	CreatorType  string  `json:"creator_type"`
+	PipelineID     *string `json:"pipeline_id,omitempty"`
+	IsDraft        bool    `json:"is_draft"`
+	TransitionMode string  `json:"transition_mode"`
+	CreatorType    string  `json:"creator_type"`
 	CreatorID    string  `json:"creator_id"`
 	CreatedAt    string  `json:"created_at"`
 	UpdatedAt    string  `json:"updated_at"`
@@ -56,8 +58,10 @@ func planningTaskToResponse(t db.Task) PlanningTaskResponse {
 		ManualTest:   textToPtr(t.ManualTest),
 		IssueID:      uuidToPtr(t.IssueID),
 		CurrentRunID: uuidToPtr(t.CurrentRunID),
-		PipelineID:   uuidToPtr(t.PipelineID),
-		CreatorType:  t.CreatorType,
+		PipelineID:     uuidToPtr(t.PipelineID),
+		IsDraft:        t.IsDraft,
+		TransitionMode: t.TransitionMode,
+		CreatorType:    t.CreatorType,
 		CreatorID:    uuidToString(t.CreatorID),
 		CreatedAt:    timestampToString(t.CreatedAt),
 		UpdatedAt:    timestampToString(t.UpdatedAt),

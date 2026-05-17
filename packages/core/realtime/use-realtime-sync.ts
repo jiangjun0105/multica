@@ -12,6 +12,8 @@ import { getCurrentWsId, getCurrentSlug } from "../platform/workspace-storage";
 import { issueKeys } from "../issues/queries";
 import { pinKeys } from "../pins/queries";
 import { runtimeKeys } from "../runtimes/queries";
+import { planningTaskKeys } from "../tasks/queries";
+import { pipelineKeys } from "../pipelines/queries";
 import {
   agentTaskSnapshotKeys,
   agentActivityKeys,
@@ -170,6 +172,25 @@ export function useRealtimeSync(
         // every list-of-tasks query stale" so cache stays fresh even
         // when the relevant component isn't currently mounted.
         qc.invalidateQueries({ queryKey: ["issues", "tasks"] });
+      },
+      // Planning task lifecycle (planning_task:created/updated/deleted/
+      // dispatched/cancelled). Fires when an agent picks up a task or any
+      // user changes its status. Invalidate:
+      //   - planningTaskKeys.all → task board + task detail + dependencies
+      //   - pipelineKeys.all     → DAG view (task statuses are embedded in
+      //                            the pipeline detail response)
+      planning_task: () => {
+        const wsId = getCurrentWsId();
+        if (!wsId) return;
+        qc.invalidateQueries({ queryKey: planningTaskKeys.all(wsId) });
+        qc.invalidateQueries({ queryKey: pipelineKeys.all(wsId) });
+      },
+      // Pipeline lifecycle (pipeline:created/updated). Invalidate the
+      // workspace's pipeline list + every pipeline detail.
+      pipeline: () => {
+        const wsId = getCurrentWsId();
+        if (!wsId) return;
+        qc.invalidateQueries({ queryKey: pipelineKeys.all(wsId) });
       },
     };
 

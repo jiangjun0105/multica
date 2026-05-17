@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -14,15 +15,15 @@ import (
 )
 
 type PipelineResponse struct {
-	ID           string                  `json:"id"`
-	WorkspaceID  string                  `json:"workspace_id"`
-	IssueID      string                  `json:"issue_id"`
-	Status       string                  `json:"status"`
-	CreatorType  string                  `json:"creator_type"`
-	CreatorID    string                  `json:"creator_id"`
-	CreatedAt    string                  `json:"created_at"`
-	UpdatedAt    string                  `json:"updated_at"`
-	Tasks        []PlanningTaskResponse  `json:"tasks,omitempty"`
+	ID           string                   `json:"id"`
+	WorkspaceID  string                   `json:"workspace_id"`
+	IssueID      *string                  `json:"issue_id"`
+	Status       string                   `json:"status"`
+	CreatorType  string                   `json:"creator_type"`
+	CreatorID    string                   `json:"creator_id"`
+	CreatedAt    string                   `json:"created_at"`
+	UpdatedAt    string                   `json:"updated_at"`
+	Tasks        []PlanningTaskResponse   `json:"tasks,omitempty"`
 	Dependencies []TaskDependencyResponse `json:"dependencies,omitempty"`
 }
 
@@ -30,7 +31,7 @@ func pipelineToResponse(p db.Pipeline) PipelineResponse {
 	return PipelineResponse{
 		ID:          uuidToString(p.ID),
 		WorkspaceID: uuidToString(p.WorkspaceID),
-		IssueID:     uuidToString(p.IssueID),
+		IssueID:     uuidToPtr(p.IssueID),
 		Status:      p.Status,
 		CreatorType: p.CreatorType,
 		CreatorID:   uuidToString(p.CreatorID),
@@ -114,6 +115,255 @@ func (h *Handler) GetPipeline(w http.ResponseWriter, r *http.Request) {
 	resp.Dependencies = depResps
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// CreatePipelineTaskInput is one task in the CreatePipeline request body.
+//
+// `depends_on` is a list of zero-based indices into the `tasks` array (NOT
+// task UUIDs — the tasks don't exist yet when the request is built). Each
+// index produces a `task_dependency` row of type `blocked_by` between the
+// task at index i and the task at the referenced index.
+type CreatePipelineTaskInput struct {
+	Title          string  `json:"title"`
+	Description    string  `json:"description"`
+	Status         string  `json:"status"`
+	Priority       string  `json:"priority"`
+	Suitability    *string `json:"suitability"`
+	IsDraft        bool    `json:"is_draft"`
+	TransitionMode string  `json:"transition_mode"`
+	DependsOn      []int   `json:"depends_on"`
+}
+
+var validTransitionModes = map[string]bool{
+	"auto":   true,
+	"manual": true,
+}
+
+// CreatePipelineRequest is the body for POST /api/pipelines.
+//
+// `issue_id` is optional. When set, the pipeline is anchored to that issue
+// (the same model as triage-finalize). When omitted, the pipeline stands
+// alone — for cross-issue work imported from external systems like
+// auto-agent.
+type CreatePipelineRequest struct {
+	IssueID *string                   `json:"issue_id"`
+	Status  string                    `json:"status"`
+	Tasks   []CreatePipelineTaskInput `json:"tasks"`
+}
+
+// CreatePipeline creates a pipeline plus its tasks and dependency edges in a
+// single transaction.
+//
+// POST /api/pipelines
+func (h *Handler) CreatePipeline(w http.ResponseWriter, r *http.Request) {
+	var req CreatePipelineRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.Tasks) == 0 {
+		writeError(w, http.StatusBadRequest, "tasks is required")
+		return
+	}
+
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+	workspaceID := h.resolveWorkspaceID(r)
+	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace_id")
+	if !ok {
+		return
+	}
+
+	pipelineStatus := req.Status
+	if pipelineStatus == "" {
+		pipelineStatus = "pending"
+	}
+	if !validPipelineStatuses[pipelineStatus] {
+		writeError(w, http.StatusBadRequest, "invalid pipeline status")
+		return
+	}
+
+	var issueUUID pgtype.UUID
+	if req.IssueID != nil && *req.IssueID != "" {
+		id, ok := parseUUIDOrBadRequest(w, *req.IssueID, "issue_id")
+		if !ok {
+			return
+		}
+		issueUUID = id
+	}
+
+	// Validate each task's depends_on indices up-front so we don't partially
+	// create a pipeline and then bail on a bad index.
+	for i, t := range req.Tasks {
+		if t.Title == "" {
+			writeError(w, http.StatusBadRequest, "task title is required")
+			return
+		}
+		status := t.Status
+		if status == "" {
+			status = "pending"
+		}
+		if !validTaskStatuses[status] {
+			writeError(w, http.StatusBadRequest, "invalid task status")
+			return
+		}
+		priority := t.Priority
+		if priority == "" {
+			priority = "medium"
+		}
+		if !validTaskPriorities[priority] {
+			writeError(w, http.StatusBadRequest, "invalid task priority")
+			return
+		}
+		if t.Suitability != nil && !validSuitabilities[*t.Suitability] {
+			writeError(w, http.StatusBadRequest, "invalid task suitability")
+			return
+		}
+		if t.TransitionMode != "" && !validTransitionModes[t.TransitionMode] {
+			writeError(w, http.StatusBadRequest, "invalid task transition_mode")
+			return
+		}
+		for _, dep := range t.DependsOn {
+			if dep < 0 || dep >= len(req.Tasks) {
+				writeError(w, http.StatusBadRequest, "depends_on index out of range")
+				return
+			}
+			if dep == i {
+				writeError(w, http.StatusBadRequest, "task cannot depend on itself")
+				return
+			}
+		}
+	}
+
+	actorType, actorID := h.resolveActor(r, userID, workspaceID)
+	actorUUID, ok := parseUUIDOrBadRequest(w, actorID, "actor_id")
+	if !ok {
+		return
+	}
+
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start transaction")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	qtx := h.Queries.WithTx(tx)
+
+	pipeline, err := qtx.CreatePipeline(r.Context(), db.CreatePipelineParams{
+		WorkspaceID: wsUUID,
+		IssueID:     issueUUID, // zero pgtype.UUID with Valid=false becomes NULL
+		Status:      pipelineStatus,
+		CreatorType: actorType,
+		CreatorID:   actorUUID,
+	})
+	if err != nil {
+		slog.Warn("create pipeline failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to create pipeline")
+		return
+	}
+
+	taskCount := int32(len(req.Tasks))
+	counterAfter, err := qtx.IncrementTaskCounter(r.Context(), db.IncrementTaskCounterParams{
+		ID:          wsUUID,
+		TaskCounter: taskCount,
+	})
+	if err != nil {
+		slog.Warn("increment task counter failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to allocate task numbers")
+		return
+	}
+	firstNumber := counterAfter - taskCount + 1
+
+	createdTasks := make([]db.Task, len(req.Tasks))
+	for i, t := range req.Tasks {
+		status := t.Status
+		if status == "" {
+			status = "pending"
+		}
+		priority := t.Priority
+		if priority == "" {
+			priority = "medium"
+		}
+		var suitability pgtype.Text
+		if t.Suitability != nil {
+			suitability = pgtype.Text{String: *t.Suitability, Valid: true}
+		}
+		var transitionMode pgtype.Text
+		if t.TransitionMode != "" {
+			transitionMode = pgtype.Text{String: t.TransitionMode, Valid: true}
+		}
+		task, err := qtx.CreateTask(r.Context(), db.CreateTaskParams{
+			WorkspaceID:    wsUUID,
+			Number:         firstNumber + int32(i),
+			Title:          t.Title,
+			Description:    t.Description,
+			Status:         status,
+			Priority:       priority,
+			Suitability:    suitability,
+			IssueID:        issueUUID,
+			PipelineID:     pipeline.ID,
+			CreatorType:    actorType,
+			CreatorID:      actorUUID,
+			IsDraft:        pgtype.Bool{Bool: t.IsDraft, Valid: true},
+			TransitionMode: transitionMode,
+		})
+		if err != nil {
+			slog.Warn("create pipeline task failed", append(logger.RequestAttrs(r), "error", err, "index", i)...)
+			writeError(w, http.StatusInternalServerError, "failed to create pipeline tasks")
+			return
+		}
+		createdTasks[i] = task
+	}
+
+	var createdDeps []db.TaskDependency
+	for i, t := range req.Tasks {
+		for _, depIdx := range t.DependsOn {
+			err := qtx.CreateTaskDependency(r.Context(), db.CreateTaskDependencyParams{
+				TaskID:          createdTasks[i].ID,
+				DependsOnTaskID: createdTasks[depIdx].ID,
+				Type:            "blocked_by",
+			})
+			if err != nil {
+				slog.Warn("create task dependency failed", append(logger.RequestAttrs(r), "error", err, "task_index", i, "dep_index", depIdx)...)
+				writeError(w, http.StatusInternalServerError, "failed to create task dependencies")
+				return
+			}
+			createdDeps = append(createdDeps, db.TaskDependency{
+				TaskID:          createdTasks[i].ID,
+				DependsOnTaskID: createdTasks[depIdx].ID,
+				Type:            "blocked_by",
+			})
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		slog.Warn("commit create pipeline failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to create pipeline")
+		return
+	}
+
+	resp := pipelineToResponse(pipeline)
+	resp.Tasks = make([]PlanningTaskResponse, len(createdTasks))
+	for i, t := range createdTasks {
+		resp.Tasks[i] = planningTaskToResponse(t)
+	}
+	resp.Dependencies = make([]TaskDependencyResponse, len(createdDeps))
+	for i, d := range createdDeps {
+		resp.Dependencies[i] = taskDependencyToResponse(d)
+	}
+
+	h.publish(protocol.EventPipelineCreated, workspaceID, actorType, actorID, pipelineToResponse(pipeline))
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+var validPipelineStatuses = map[string]bool{
+	"pending":   true,
+	"running":   true,
+	"completed": true,
+	"failed":    true,
+	"cancelled": true,
 }
 
 // ListPipelines returns paginated pipelines for a workspace.

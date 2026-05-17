@@ -39,6 +39,8 @@ type CreatePipelineParams struct {
 }
 
 // Pipeline queries.
+// IssueID is nullable: pass an invalid pgtype.UUID (Valid=false) to create a
+// pipeline that is not anchored to any single issue. See migration 080.
 func (q *Queries) CreatePipeline(ctx context.Context, arg CreatePipelineParams) (Pipeline, error) {
 	row := q.db.QueryRow(ctx, createPipeline,
 		arg.WorkspaceID,
@@ -177,7 +179,7 @@ func (q *Queries) ListPipelines(ctx context.Context, arg ListPipelinesParams) ([
 }
 
 const listTasksByPipelineID = `-- name: ListTasksByPipelineID :many
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id FROM task
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft, transition_mode FROM task
 WHERE pipeline_id = $1
 ORDER BY number ASC
 `
@@ -210,6 +212,8 @@ func (q *Queries) ListTasksByPipelineID(ctx context.Context, pipelineID pgtype.U
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PipelineID,
+			&i.IsDraft,
+			&i.TransitionMode,
 		); err != nil {
 			return nil, err
 		}

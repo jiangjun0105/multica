@@ -60,7 +60,18 @@ export type WSEventType =
   | "invitation:created"
   | "invitation:accepted"
   | "invitation:declined"
-  | "invitation:revoked";
+  | "invitation:revoked"
+  // Planning tasks (the "task" table — not task_run). Fire on CRUD,
+  // dispatch, and cancel so the pipeline DAG + task list auto-refresh
+  // when an agent or another user touches a task.
+  | "planning_task:created"
+  | "planning_task:updated"
+  | "planning_task:deleted"
+  | "planning_task:dispatched"
+  | "planning_task:cancelled"
+  // Pipeline lifecycle (status rollup, cancel).
+  | "pipeline:created"
+  | "pipeline:updated";
 
 export interface WSMessage<T = unknown> {
   type: WSEventType;

@@ -310,24 +310,26 @@ type SkillFile struct {
 }
 
 type Task struct {
-	ID           pgtype.UUID        `json:"id"`
-	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
-	Number       int32              `json:"number"`
-	Title        string             `json:"title"`
-	Description  string             `json:"description"`
-	Status       string             `json:"status"`
-	Priority     string             `json:"priority"`
-	Suitability  pgtype.Text        `json:"suitability"`
-	Branch       pgtype.Text        `json:"branch"`
-	Pr           pgtype.Text        `json:"pr"`
-	ManualTest   pgtype.Text        `json:"manual_test"`
-	IssueID      pgtype.UUID        `json:"issue_id"`
-	CurrentRunID pgtype.UUID        `json:"current_run_id"`
-	CreatorType  string             `json:"creator_type"`
-	CreatorID    pgtype.UUID        `json:"creator_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	PipelineID   pgtype.UUID        `json:"pipeline_id"`
+	ID             pgtype.UUID        `json:"id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	Number         int32              `json:"number"`
+	Title          string             `json:"title"`
+	Description    string             `json:"description"`
+	Status         string             `json:"status"`
+	Priority       string             `json:"priority"`
+	Suitability    pgtype.Text        `json:"suitability"`
+	Branch         pgtype.Text        `json:"branch"`
+	Pr             pgtype.Text        `json:"pr"`
+	ManualTest     pgtype.Text        `json:"manual_test"`
+	IssueID        pgtype.UUID        `json:"issue_id"`
+	CurrentRunID   pgtype.UUID        `json:"current_run_id"`
+	CreatorType    string             `json:"creator_type"`
+	CreatorID      pgtype.UUID        `json:"creator_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	PipelineID     pgtype.UUID        `json:"pipeline_id"`
+	IsDraft        bool               `json:"is_draft"`
+	TransitionMode string             `json:"transition_mode"`
 }
 
 type TaskDependency struct {

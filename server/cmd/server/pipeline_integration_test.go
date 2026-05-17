@@ -6,6 +6,34 @@ import (
 	"testing"
 )
 
+// createPipelineViaPOST exercises POST /api/pipelines directly (no triage flow).
+// Returns (pipelineID, taskIDs in request order).
+func createPipelineViaPOST(t *testing.T, body map[string]any) (string, []string) {
+	t.Helper()
+	resp := authRequest(t, "POST", "/api/pipelines?workspace_id="+testWorkspaceID, body)
+	if resp.StatusCode != 201 {
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("CreatePipeline: expected 201, got %d: %s", resp.StatusCode, b)
+	}
+	var result map[string]any
+	readJSON(t, resp, &result)
+	pipelineID := result["id"].(string)
+
+	tasks := result["tasks"].([]any)
+	taskIDs := make([]string, len(tasks))
+	for i, ti := range tasks {
+		taskIDs[i] = ti.(map[string]any)["id"].(string)
+	}
+
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM task_dependency WHERE task_id IN (SELECT id FROM task WHERE pipeline_id = $1)`, pipelineID)
+		testPool.Exec(context.Background(), `DELETE FROM task WHERE pipeline_id = $1`, pipelineID)
+		testPool.Exec(context.Background(), `DELETE FROM pipeline WHERE id = $1`, pipelineID)
+	})
+	return pipelineID, taskIDs
+}
+
 func createTestIssueForPipeline(t *testing.T) string {
 	t.Helper()
 	resp := authRequest(t, "POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
@@ -287,4 +315,185 @@ func TestGetPipeline_NotFound(t *testing.T) {
 		t.Fatalf("expected 404, got %d", resp.StatusCode)
 	}
 	resp.Body.Close()
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/pipelines — direct create endpoint (no triage flow required).
+// ---------------------------------------------------------------------------
+
+func TestCreatePipeline_HappyPath_NoIssue(t *testing.T) {
+	pipelineID, taskIDs := createPipelineViaPOST(t, map[string]any{
+		"issue_id": nil,
+		"status":   "running",
+		"tasks": []map[string]any{
+			{"title": "Setup", "status": "done"},
+			{"title": "Build", "status": "in_progress", "depends_on": []int{0}},
+			{"title": "Ship", "status": "pending", "depends_on": []int{1}},
+		},
+	})
+	if len(taskIDs) != 3 {
+		t.Fatalf("expected 3 tasks, got %d", len(taskIDs))
+	}
+
+	resp := authRequest(t, "GET", "/api/pipelines/"+pipelineID+"?workspace_id="+testWorkspaceID, nil)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("GetPipeline: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var pipeline map[string]any
+	readJSON(t, resp, &pipeline)
+
+	if pipeline["status"] != "running" {
+		t.Fatalf("expected pipeline status 'running', got %v", pipeline["status"])
+	}
+	// issue_id should be JSON null when omitted, which decodes to nil in Go.
+	if pipeline["issue_id"] != nil {
+		t.Fatalf("expected null issue_id, got %v", pipeline["issue_id"])
+	}
+
+	pTasks := pipeline["tasks"].([]any)
+	if len(pTasks) != 3 {
+		t.Fatalf("expected 3 tasks in pipeline, got %d", len(pTasks))
+	}
+	for i, pt := range pTasks {
+		task := pt.(map[string]any)
+		if task["pipeline_id"] != pipelineID {
+			t.Fatalf("task[%d].pipeline_id = %v, want %s", i, task["pipeline_id"], pipelineID)
+		}
+	}
+
+	// Two blocked_by edges: 1→0, 2→1.
+	deps := pipeline["dependencies"].([]any)
+	if len(deps) != 2 {
+		t.Fatalf("expected 2 dependency edges, got %d", len(deps))
+	}
+	depPairs := map[string]string{}
+	for _, d := range deps {
+		dm := d.(map[string]any)
+		if dm["type"] != "blocked_by" {
+			t.Fatalf("expected type 'blocked_by', got %v", dm["type"])
+		}
+		depPairs[dm["task_id"].(string)] = dm["depends_on_task_id"].(string)
+	}
+	if depPairs[taskIDs[1]] != taskIDs[0] {
+		t.Fatalf("task[1] should depend on task[0]")
+	}
+	if depPairs[taskIDs[2]] != taskIDs[1] {
+		t.Fatalf("task[2] should depend on task[1]")
+	}
+}
+
+func TestCreatePipeline_WithIssue(t *testing.T) {
+	issueID := createTestIssueForPipeline(t)
+	pipelineID, taskIDs := createPipelineViaPOST(t, map[string]any{
+		"issue_id": issueID,
+		"tasks": []map[string]any{
+			{"title": "T1"},
+			{"title": "T2", "depends_on": []int{0}},
+		},
+	})
+
+	resp := authRequest(t, "GET", "/api/pipelines/"+pipelineID+"?workspace_id="+testWorkspaceID, nil)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("GetPipeline: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	var pipeline map[string]any
+	readJSON(t, resp, &pipeline)
+	if pipeline["issue_id"] != issueID {
+		t.Fatalf("expected issue_id %s, got %v", issueID, pipeline["issue_id"])
+	}
+	// Tasks should inherit the same issue_id.
+	tasks := pipeline["tasks"].([]any)
+	for i, ti := range tasks {
+		task := ti.(map[string]any)
+		if task["issue_id"] != issueID {
+			t.Fatalf("task[%d].issue_id = %v, want %s (id=%s)", i, task["issue_id"], issueID, taskIDs[i])
+		}
+	}
+}
+
+func TestCreatePipeline_DefaultsStatusAndPriority(t *testing.T) {
+	pipelineID, _ := createPipelineViaPOST(t, map[string]any{
+		"tasks": []map[string]any{
+			{"title": "no-status-no-priority"},
+		},
+	})
+
+	resp := authRequest(t, "GET", "/api/pipelines/"+pipelineID+"?workspace_id="+testWorkspaceID, nil)
+	var pipeline map[string]any
+	readJSON(t, resp, &pipeline)
+
+	if pipeline["status"] != "pending" {
+		t.Fatalf("expected default pipeline status 'pending', got %v", pipeline["status"])
+	}
+	task := pipeline["tasks"].([]any)[0].(map[string]any)
+	if task["status"] != "pending" {
+		t.Fatalf("expected default task status 'pending', got %v", task["status"])
+	}
+	if task["priority"] != "medium" {
+		t.Fatalf("expected default task priority 'medium', got %v", task["priority"])
+	}
+}
+
+func TestCreatePipeline_EmptyTasks_400(t *testing.T) {
+	resp := authRequest(t, "POST", "/api/pipelines?workspace_id="+testWorkspaceID, map[string]any{
+		"tasks": []map[string]any{},
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected 400 for empty tasks, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreatePipeline_InvalidDependsOnIndex_400(t *testing.T) {
+	resp := authRequest(t, "POST", "/api/pipelines?workspace_id="+testWorkspaceID, map[string]any{
+		"tasks": []map[string]any{
+			{"title": "A"},
+			{"title": "B", "depends_on": []int{5}}, // out of range
+		},
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected 400 for out-of-range depends_on, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreatePipeline_SelfDependency_400(t *testing.T) {
+	resp := authRequest(t, "POST", "/api/pipelines?workspace_id="+testWorkspaceID, map[string]any{
+		"tasks": []map[string]any{
+			{"title": "A"},
+			{"title": "B", "depends_on": []int{1}}, // depends on itself
+		},
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected 400 for self-dependency, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreatePipeline_InvalidTaskStatus_400(t *testing.T) {
+	resp := authRequest(t, "POST", "/api/pipelines?workspace_id="+testWorkspaceID, map[string]any{
+		"tasks": []map[string]any{
+			{"title": "A", "status": "frobnicated"},
+		},
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected 400 for invalid task status, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreatePipeline_MissingTitle_400(t *testing.T) {
+	resp := authRequest(t, "POST", "/api/pipelines?workspace_id="+testWorkspaceID, map[string]any{
+		"tasks": []map[string]any{
+			{"title": ""},
+		},
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected 400 for missing title, got %d", resp.StatusCode)
+	}
 }
