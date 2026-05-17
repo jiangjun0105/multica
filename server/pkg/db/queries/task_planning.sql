@@ -1,18 +1,13 @@
--- Task planning queries (the "task" table — not task_run).
+-- Task planning queries (the "task" table — unified planning + execution).
 
 -- name: CreateTask :one
--- is_draft and transition_mode use COALESCE so older callers (no field
--- passed) get the column defaults. See migrations 081 and 082.
 INSERT INTO task (
     workspace_id, number, title, description, status, priority,
-    suitability, manual_test, issue_id, pipeline_id, creator_type, creator_id,
-    is_draft, transition_mode
+    suitability, manual_test, issue_id, pipeline_id, creator_type, creator_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     sqlc.narg('suitability'), sqlc.narg('manual_test'), sqlc.narg('issue_id'),
-    sqlc.narg('pipeline_id'), $7, $8,
-    COALESCE(sqlc.narg('is_draft')::boolean, false),
-    COALESCE(sqlc.narg('transition_mode')::text, 'manual')
+    sqlc.narg('pipeline_id'), $7, $8
 ) RETURNING *;
 
 -- name: GetTask :one
@@ -48,7 +43,6 @@ UPDATE task SET
     pr = sqlc.narg('pr'),
     manual_test = sqlc.narg('manual_test'),
     issue_id = sqlc.narg('issue_id'),
-    current_run_id = sqlc.narg('current_run_id'),
     pipeline_id = sqlc.narg('pipeline_id'),
     updated_at = now()
 WHERE id = $1 AND workspace_id = $2

@@ -14,10 +14,6 @@ WHERE task_id = $1
 ORDER BY model;
 
 -- name: GetWorkspaceUsageByDay :many
--- Bucket by tu.created_at (usage report time, ~= task completion time), not
--- atq.created_at (task enqueue time), so tasks that queue one day and execute
--- the next are attributed to the day tokens were actually produced. The since
--- cutoff is truncated to start-of-day so `days=N` yields full calendar days.
 SELECT
     DATE(tu.created_at) AS date,
     tu.model,
@@ -27,16 +23,13 @@ SELECT
     SUM(tu.cache_write_tokens)::bigint AS total_cache_write_tokens,
     COUNT(DISTINCT tu.task_id)::int AS task_count
 FROM task_usage tu
-JOIN task_run atq ON atq.id = tu.task_id
-JOIN agent a ON a.id = atq.agent_id
-WHERE a.workspace_id = $1
+JOIN task t ON t.id = tu.task_id
+WHERE t.workspace_id = $1
   AND tu.created_at >= DATE_TRUNC('day', @since::timestamptz)
 GROUP BY DATE(tu.created_at), tu.model
 ORDER BY DATE(tu.created_at) DESC, tu.model;
 
 -- name: GetWorkspaceUsageSummary :many
--- Filter by tu.created_at (usage report time), aligned to start-of-day, so
--- `days=N` is interpreted as N full calendar days like the other usage queries.
 SELECT
     tu.model,
     SUM(tu.input_tokens)::bigint AS total_input_tokens,
@@ -45,9 +38,8 @@ SELECT
     SUM(tu.cache_write_tokens)::bigint AS total_cache_write_tokens,
     COUNT(DISTINCT tu.task_id)::int AS task_count
 FROM task_usage tu
-JOIN task_run atq ON atq.id = tu.task_id
-JOIN agent a ON a.id = atq.agent_id
-WHERE a.workspace_id = $1
+JOIN task t ON t.id = tu.task_id
+WHERE t.workspace_id = $1
   AND tu.created_at >= DATE_TRUNC('day', @since::timestamptz)
 GROUP BY tu.model
 ORDER BY (SUM(tu.input_tokens) + SUM(tu.output_tokens)) DESC;
@@ -60,5 +52,5 @@ SELECT
     COALESCE(SUM(tu.cache_write_tokens), 0)::bigint AS total_cache_write_tokens,
     COUNT(DISTINCT tu.task_id)::int AS task_count
 FROM task_usage tu
-JOIN task_run atq ON atq.id = tu.task_id
-WHERE atq.task_id = $1;
+JOIN task t ON t.id = tu.task_id
+WHERE t.issue_id = $1;

@@ -69,19 +69,23 @@ SELECT * FROM chat_message
 WHERE id = $1;
 
 -- name: CreateChatTask :one
-INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, chat_session_id)
-VALUES ($1, $2, NULL, 'queued', $3, $4)
+INSERT INTO task (
+    workspace_id, number, title, description,
+    agent_id, runtime_id, issue_id, status, queue_priority, chat_session_id,
+    creator_type, creator_id
+)
+VALUES ($1, $2, $3, '', $4, $5, NULL, 'queued', $6, $7, $8, $9)
 RETURNING *;
 
 -- name: GetLastChatTaskSession :one
 -- Returns the most recent task in this chat session that managed to record a
--- session_id. Includes both completed and failed tasks: even a failed task
+-- session_id. Includes both done and failed tasks: even a failed task
 -- may have established a real agent session before failing, and we'd rather
 -- resume there than start over and lose conversation memory. Used as a
 -- fallback when chat_session.session_id is NULL.
-SELECT session_id, work_dir, runtime_id FROM task_run
+SELECT session_id, work_dir, runtime_id FROM task
 WHERE chat_session_id = $1
-  AND status IN ('completed', 'failed')
+  AND status IN ('done', 'failed')
   AND session_id IS NOT NULL
 ORDER BY completed_at DESC
 LIMIT 1;
@@ -89,10 +93,7 @@ LIMIT 1;
 -- name: GetPendingChatTask :one
 -- Returns the most recent in-flight task for a chat session, if any.
 -- Used by the frontend to recover pending state after refresh / reopen.
--- created_at is the anchor for the chat StatusPill timer (it computes
--- elapsed = now - task.created_at), so the pill survives refresh / reopen
--- without "resetting to 0s".
-SELECT id, status, created_at FROM task_run
+SELECT id, status, created_at FROM task
 WHERE chat_session_id = $1 AND status IN ('queued', 'dispatched', 'running')
 ORDER BY created_at DESC
 LIMIT 1;
@@ -101,13 +102,16 @@ LIMIT 1;
 -- Aggregate view of all in-flight chat tasks owned by a given creator in a
 -- workspace. Drives the FAB's "running" indicator when the chat window is
 -- closed and no single session's query is active.
-SELECT atq.id AS task_id, atq.status, atq.chat_session_id
-FROM task_run atq
-JOIN chat_session cs ON cs.id = atq.chat_session_id
-WHERE cs.workspace_id = $1
-  AND cs.creator_id = $2
-  AND atq.status IN ('queued', 'dispatched', 'running')
-ORDER BY atq.created_at DESC;
+SELECT t.id AS task_id, t.status, t.chat_session_id
+FROM task t
+WHERE t.workspace_id = $1
+  AND t.chat_session_id IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM chat_session cs
+    WHERE cs.id = t.chat_session_id AND cs.creator_id = $2
+  )
+  AND t.status IN ('queued', 'dispatched', 'running')
+ORDER BY t.created_at DESC;
 
 -- name: MarkChatSessionRead :exec
 -- Clears unread_since, dropping the session's unread count to 0.

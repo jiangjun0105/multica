@@ -71,25 +71,25 @@ func (h *Handler) requireDaemonRuntimeAccess(w http.ResponseWriter, r *http.Requ
 }
 
 // requireDaemonTaskAccess looks up a task and verifies the caller owns its workspace.
-func (h *Handler) requireDaemonTaskAccess(w http.ResponseWriter, r *http.Request, taskID string) (db.TaskRun, bool) {
+func (h *Handler) requireDaemonTaskAccess(w http.ResponseWriter, r *http.Request, taskID string) (db.Task, bool) {
 	taskUUID, ok := parseUUIDOrBadRequest(w, taskID, "task_id")
 	if !ok {
-		return db.TaskRun{}, false
+		return db.Task{}, false
 	}
 	task, err := h.Queries.GetAgentTask(r.Context(), taskUUID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "task not found")
-		return db.TaskRun{}, false
+		return db.Task{}, false
 	}
 
 	wsID := h.TaskService.ResolveTaskWorkspaceID(r.Context(), task)
 	if wsID == "" {
 		writeError(w, http.StatusNotFound, "task not found")
-		return db.TaskRun{}, false
+		return db.Task{}, false
 	}
 
 	if !h.requireDaemonWorkspaceAccess(w, r, wsID) {
-		return db.TaskRun{}, false
+		return db.Task{}, false
 	}
 	return task, true
 }
@@ -831,8 +831,8 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 	// project explicitly attached its repos, those are the authoritative set
 	// for issues inside that project. When the project has no github_repo
 	// resources (or no project at all), we fall back to the workspace repos.
-	if task.TaskID.Valid {
-		if issue, err := h.Queries.GetIssue(r.Context(), task.TaskID); err == nil {
+	if task.IssueID.Valid {
+		if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
 			resp.WorkspaceID = uuidToString(issue.WorkspaceID)
 
 				if ws, err := h.Queries.GetWorkspace(r.Context(), issue.WorkspaceID); err == nil && ws.Repos != nil {
@@ -882,7 +882,7 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		if !task.ForceFreshSession {
 			if prior, err := h.Queries.GetLastTaskSession(r.Context(), db.GetLastTaskSessionParams{
 				AgentID: task.AgentID,
-				TaskID:  task.TaskID,
+				TaskID:  task.IssueID,
 			}); err == nil && prior.SessionID.Valid {
 				if prior.RuntimeID == task.RuntimeID {
 					resp.PriorSessionID = prior.SessionID.String
@@ -944,7 +944,7 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 	// prompt come from the task's context JSONB. Resolve workspace from
 	// there so the isolation check below has something to compare.
 	hasQuickCreate := false
-	if task.Context != nil && !task.TaskID.Valid && !task.ChatSessionID.Valid {
+	if task.Context != nil && !task.IssueID.Valid && !task.ChatSessionID.Valid {
 		var qc service.QuickCreateContext
 		if json.Unmarshal(task.Context, &qc) == nil && qc.Type == service.QuickCreateContextType {
 			hasQuickCreate = true
@@ -974,7 +974,7 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 			"runtime_id", runtimeID,
 			"runtime_workspace", runtimeWorkspaceID,
 			"resolved_workspace", resp.WorkspaceID,
-			"has_issue", task.TaskID.Valid,
+			"has_issue", task.IssueID.Valid,
 			"has_chat", task.ChatSessionID.Valid,
 						"has_quick_create", hasQuickCreate,
 		)
@@ -1060,8 +1060,8 @@ func (h *Handler) ReportTaskProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workspaceID := ""
-	if task.TaskID.Valid {
-		if issue, err := h.Queries.GetIssue(r.Context(), task.TaskID); err == nil {
+	if task.IssueID.Valid {
+		if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
 			workspaceID = uuidToString(issue.WorkspaceID)
 		}
 	}
@@ -1111,14 +1111,14 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 // the issue to reach terminal done. Retries / re-assignments / comment-
 // triggered follow-ups hit the WHERE first_executed_at IS NULL clause and
 // no-op, so the funnel counts unique issues, not tasks.
-func (h *Handler) emitIssueExecutedOnFirstCompletion(r *http.Request, task *db.TaskRun) {
+func (h *Handler) emitIssueExecutedOnFirstCompletion(r *http.Request, task *db.Task) {
 	if task == nil {
 		return
 	}
-	marked, err := h.Queries.MarkIssueFirstExecuted(r.Context(), task.TaskID)
+	marked, err := h.Queries.MarkIssueFirstExecuted(r.Context(), task.IssueID)
 	if err != nil {
 		if !isNotFound(err) {
-			slog.Warn("analytics: mark issue first-executed failed", "issue_id", uuidToString(task.TaskID), "error", err)
+			slog.Warn("analytics: mark issue first-executed failed", "issue_id", uuidToString(task.IssueID), "error", err)
 		}
 		return
 	}
@@ -1271,8 +1271,8 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workspaceID := ""
-	if task.TaskID.Valid {
-		if issue, err := h.Queries.GetIssue(r.Context(), task.TaskID); err == nil {
+	if task.IssueID.Valid {
+		if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
 			workspaceID = uuidToString(issue.WorkspaceID)
 		}
 	}
@@ -1305,7 +1305,7 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 		if workspaceID != "" {
 			h.publishTask(protocol.EventTaskMessage, workspaceID, "system", "", taskID, protocol.TaskMessagePayload{
 				TaskID:  taskID,
-				IssueID: uuidToString(task.TaskID),
+				IssueID: uuidToString(task.IssueID),
 				Seq:     msg.Seq,
 				Type:    msg.Type,
 				Tool:    msg.Tool,
@@ -1351,7 +1351,7 @@ func (h *Handler) ListTaskMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	issueID := uuidToString(task.TaskID)
+	issueID := uuidToString(task.IssueID)
 
 	resp := make([]protocol.TaskMessagePayload, len(messages))
 	for i, m := range messages {
@@ -1409,7 +1409,7 @@ func (h *Handler) CancelTask(w http.ResponseWriter, r *http.Request) {
 
 	taskID := chi.URLParam(r, "taskId")
 	existing, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
-	if err != nil || uuidToString(existing.TaskID) != uuidToString(issue.ID) {
+	if err != nil || uuidToString(existing.IssueID) != uuidToString(issue.ID) {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
@@ -1421,7 +1421,7 @@ func (h *Handler) CancelTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("task cancelled by user", "task_id", taskID, "issue_id", uuidToString(task.TaskID))
+	slog.Info("task cancelled by user", "task_id", taskID, "issue_id", uuidToString(task.IssueID))
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
 }
 
@@ -1488,7 +1488,7 @@ func (h *Handler) ListTaskMessagesByUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	issueID := uuidToString(task.TaskID)
+	issueID := uuidToString(task.IssueID)
 
 	resp := make([]protocol.TaskMessagePayload, len(messages))
 	for i, m := range messages {

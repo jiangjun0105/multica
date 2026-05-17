@@ -383,7 +383,7 @@ func (h *Handler) ListPendingChatTasks(w http.ResponseWriter, r *http.Request) {
 	items := make([]PendingChatTaskItem, len(rows))
 	for i, row := range rows {
 		items[i] = PendingChatTaskItem{
-			TaskID:        uuidToString(row.TaskID),
+			TaskID:        uuidToString(row.IssueID),
 			Status:        row.Status,
 			ChatSessionID: uuidToString(row.ChatSessionID),
 		}
@@ -460,8 +460,8 @@ func (h *Handler) CancelTaskByUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "not your task")
 			return
 		}
-	} else if task.TaskID.Valid {
-		issue, err := h.Queries.GetIssue(r.Context(), task.TaskID)
+	} else if task.IssueID.Valid {
+		issue, err := h.Queries.GetIssue(r.Context(), task.IssueID)
 		if err != nil || uuidToString(issue.WorkspaceID) != workspaceID {
 			writeError(w, http.StatusNotFound, "task not found")
 			return
@@ -531,7 +531,7 @@ func chatMessageToResponse(m db.ChatMessage) ChatMessageResponse {
 		ChatSessionID: uuidToString(m.ChatSessionID),
 		Role:          m.Role,
 		Content:       m.Content,
-		TaskID:        uuidToPtr(m.TaskID),
+		TaskID:        uuidToPtr(m.IssueID),
 		CreatedAt:     timestampToString(m.CreatedAt),
 		FailureReason: textToPtr(m.FailureReason),
 		ElapsedMs:     int8ToPtr(m.ElapsedMs),
