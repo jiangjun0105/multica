@@ -53,10 +53,10 @@ func TestWorkspaceUsage_BucketsByUsageTime(t *testing.T) {
 	insertTaskWithUsage := func(enqueueAt, usageAt time.Time, inputTokens int64) {
 		var taskID string
 		if err := testPool.QueryRow(ctx, `
-			INSERT INTO task_run (agent_id, task_id, runtime_id, status, created_at)
-			VALUES ($1, $2, $3, 'completed', $4)
+			INSERT INTO task (workspace_id, number, title, creator_type, creator_id, agent_id, issue_id, runtime_id, status, created_at)
+			VALUES ($1, $2, 'test-task', 'agent', $3, $3, $4, $5, 'done', $6)
 			RETURNING id
-		`, agentID, issueID, runtimeID, enqueueAt).Scan(&taskID); err != nil {
+		`, testWorkspaceID, 1000+inputTokens, agentID, issueID, runtimeID, enqueueAt).Scan(&taskID); err != nil {
 			t.Fatalf("insert task: %v", err)
 		}
 		if _, err := testPool.Exec(ctx, `
@@ -66,7 +66,7 @@ func TestWorkspaceUsage_BucketsByUsageTime(t *testing.T) {
 			t.Fatalf("insert task_usage: %v", err)
 		}
 		t.Cleanup(func() {
-			testPool.Exec(ctx, `DELETE FROM task_run WHERE id = $1`, taskID)
+			testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, taskID)
 		})
 	}
 

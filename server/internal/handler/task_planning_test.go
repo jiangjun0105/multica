@@ -180,7 +180,7 @@ func TestPlanningTaskListFilters(t *testing.T) {
 	req = newRequest("POST", "/api/tasks", map[string]any{
 		"title":    "Filter test low",
 		"priority": "low",
-		"status":   "in_progress",
+		"status":   "running",
 	})
 	testHandler.CreatePlanningTask(w, req)
 	if w.Code != http.StatusCreated {
@@ -210,7 +210,7 @@ func TestPlanningTaskListFilters(t *testing.T) {
 	}
 	json.NewDecoder(w.Body).Decode(&statusResp)
 	for _, tsk := range statusResp.Tasks {
-		if tsk.Status != "in_progress" {
+		if tsk.Status != "running" {
 			t.Fatalf("status filter: found task with status %s", tsk.Status)
 		}
 	}
@@ -264,7 +264,7 @@ func TestPlanningTaskDispatchCancelRetry(t *testing.T) {
 	}
 	var dispatched PlanningTaskResponse
 	json.NewDecoder(w.Body).Decode(&dispatched)
-	if dispatched.Status != "in_progress" {
+	if dispatched.Status != "running" {
 		t.Fatalf("DispatchPlanningTask: expected status 'in_progress', got %s", dispatched.Status)
 	}
 

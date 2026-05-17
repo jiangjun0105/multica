@@ -198,6 +198,28 @@ func createHandlerTestAgent(t *testing.T, name string, mcpConfig []byte) string 
 	return agentID
 }
 
+var taskNumberSeq int32
+
+func insertTestTask(t *testing.T, agentID, issueID, runtimeID, status string, extraCols ...string) string {
+	t.Helper()
+	taskNumberSeq++
+	var taskID string
+	err := testPool.QueryRow(context.Background(), `
+		INSERT INTO task (workspace_id, number, title, creator_type, creator_id,
+		                  agent_id, issue_id, status, runtime_id)
+		VALUES ($1, $2, 'test-task', 'agent', $3::uuid,
+		        $3::uuid, $4::uuid, $5, $6::uuid)
+		RETURNING id
+	`, testWorkspaceID, taskNumberSeq, agentID, issueID, status, runtimeID).Scan(&taskID)
+	if err != nil {
+		t.Fatalf("insertTestTask: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM task WHERE id = $1`, taskID)
+	})
+	return taskID
+}
+
 func fetchAgentMcpConfig(t *testing.T, agentID string) []byte {
 	t.Helper()
 
@@ -1614,16 +1636,16 @@ func TestResolveActor(t *testing.T) {
 
 	var taskID string
 	err = testPool.QueryRow(ctx,
-		`INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority)
-		 VALUES ($1, $2, $3, 'queued', 0)
-		 RETURNING id`, agentID, runtimeID, issueID,
+		`INSERT INTO task (workspace_id, number, title, creator_type, creator_id, agent_id, runtime_id, issue_id, status, queue_priority)
+		 VALUES ($1, 1001, 'test-task', 'agent', $2, $2, $3, $4, 'queued', 0)
+		 RETURNING id`, testWorkspaceID, agentID, runtimeID, issueID,
 	).Scan(&taskID)
 	if err != nil {
 		t.Fatalf("failed to create test task: %v", err)
 	}
 
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM task_run WHERE id = $1`, taskID)
+		testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, taskID)
 		testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
 	})
 
@@ -1723,7 +1745,7 @@ func TestBacklogNoTriggerOnCreate(t *testing.T) {
 
 	var taskCount int
 	err = testPool.QueryRow(ctx,
-		`SELECT count(*) FROM task_run WHERE task_id = $1`,
+		`SELECT count(*) FROM task WHERE issue_id = $1`,
 		created.ID,
 	).Scan(&taskCount)
 	if err != nil {
@@ -1784,7 +1806,7 @@ func TestBacklogToTodoTriggersAgent(t *testing.T) {
 	// Verify exactly one task was enqueued (from the status transition, not creation).
 	var taskCount int
 	err = testPool.QueryRow(ctx,
-		`SELECT count(*) FROM task_run WHERE task_id = $1 AND agent_id = $2 AND status = 'queued'`,
+		`SELECT count(*) FROM task WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'`,
 		created.ID, agentID,
 	).Scan(&taskCount)
 	if err != nil {
@@ -1795,7 +1817,7 @@ func TestBacklogToTodoTriggersAgent(t *testing.T) {
 	}
 
 	// Cleanup
-	testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1`, created.ID)
+	testPool.Exec(ctx, `DELETE FROM task WHERE issue_id = $1`, created.ID)
 	cleanupReq := newRequest("DELETE", "/api/issues/"+created.ID, nil)
 	cleanupReq = withURLParam(cleanupReq, "id", created.ID)
 	testHandler.DeleteIssue(httptest.NewRecorder(), cleanupReq)
@@ -1850,7 +1872,7 @@ func TestAgentReplyDoesNotInheritParentMentions(t *testing.T) {
 	issueID := issue.ID
 
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1`, issueID)
+		testPool.Exec(ctx, `DELETE FROM task WHERE issue_id = $1`, issueID)
 		testPool.Exec(ctx, `DELETE FROM comment WHERE issue_id = $1`, issueID)
 		testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
 	})
@@ -1859,7 +1881,7 @@ func TestAgentReplyDoesNotInheritParentMentions(t *testing.T) {
 	countTasks := func(agentID string) int {
 		var n int
 		err := testPool.QueryRow(ctx,
-			`SELECT count(*) FROM task_run WHERE task_id = $1 AND agent_id = $2 AND status = 'queued'`,
+			`SELECT count(*) FROM task WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'`,
 			issueID, agentID,
 		).Scan(&n)
 		if err != nil {
@@ -1871,7 +1893,7 @@ func TestAgentReplyDoesNotInheritParentMentions(t *testing.T) {
 	// Helper: cancel all tasks for an agent on this issue.
 	cancelTasks := func(agentID string) {
 		_, err := testPool.Exec(ctx,
-			`UPDATE task_run SET status = 'cancelled' WHERE task_id = $1 AND agent_id = $2`,
+			`UPDATE task SET status = 'cancelled' WHERE issue_id = $1 AND agent_id = $2`,
 			issueID, agentID,
 		)
 		if err != nil {
@@ -1967,7 +1989,7 @@ func TestMemberReplyToAgentRootDoesNotInheritParentMentions(t *testing.T) {
 	issueID := issue.ID
 
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1`, issueID)
+		testPool.Exec(ctx, `DELETE FROM task WHERE issue_id = $1`, issueID)
 		testPool.Exec(ctx, `DELETE FROM comment WHERE issue_id = $1`, issueID)
 		testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
 	})
@@ -1975,7 +1997,7 @@ func TestMemberReplyToAgentRootDoesNotInheritParentMentions(t *testing.T) {
 	countTasks := func(agentID string) int {
 		var n int
 		err := testPool.QueryRow(ctx,
-			`SELECT count(*) FROM task_run WHERE task_id = $1 AND agent_id = $2 AND status = 'queued'`,
+			`SELECT count(*) FROM task WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'`,
 			issueID, agentID,
 		).Scan(&n)
 		if err != nil {
@@ -2004,7 +2026,7 @@ func TestMemberReplyToAgentRootDoesNotInheritParentMentions(t *testing.T) {
 
 	// Cancel reviewer's task so it's free to be re-triggered if the bug returns.
 	if _, err := testPool.Exec(ctx,
-		`UPDATE task_run SET status = 'cancelled' WHERE task_id = $1 AND agent_id = $2`,
+		`UPDATE task SET status = 'cancelled' WHERE issue_id = $1 AND agent_id = $2`,
 		issueID, reviewerAgent,
 	); err != nil {
 		t.Fatalf("cancel reviewer task: %v", err)
@@ -2058,7 +2080,7 @@ func TestAgentExplicitMentionStillTriggers(t *testing.T) {
 	issueID := issue.ID
 
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1`, issueID)
+		testPool.Exec(ctx, `DELETE FROM task WHERE issue_id = $1`, issueID)
 		testPool.Exec(ctx, `DELETE FROM comment WHERE issue_id = $1`, issueID)
 		testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
 	})
@@ -2066,7 +2088,7 @@ func TestAgentExplicitMentionStillTriggers(t *testing.T) {
 	countTasks := func(agentID string) int {
 		var n int
 		err := testPool.QueryRow(ctx,
-			`SELECT count(*) FROM task_run WHERE task_id = $1 AND agent_id = $2 AND status = 'queued'`,
+			`SELECT count(*) FROM task WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'`,
 			issueID, agentID,
 		).Scan(&n)
 		if err != nil {

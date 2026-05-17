@@ -183,8 +183,8 @@ func TestIntegration_InsertIssueAndTask(t *testing.T) {
 	if taskTitle != "Integration test task" {
 		t.Errorf("task title = %q, want %q", taskTitle, "Integration test task")
 	}
-	if taskStatus != "in_progress" {
-		t.Errorf("task status = %q, want %q (should remap in-progress)", taskStatus, "in_progress")
+	if taskStatus != "running" {
+		t.Errorf("task status = %q, want %q (should remap in-progress)", taskStatus, "running")
 	}
 }
 

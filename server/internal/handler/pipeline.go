@@ -535,7 +535,7 @@ func rollupPipelineStatus(tasks []db.Task) string {
 			doneCount++
 		case "cancelled":
 			cancelledCount++
-		case "in_progress":
+		case "running", "dispatched", "queued":
 			runningCount++
 		}
 	}

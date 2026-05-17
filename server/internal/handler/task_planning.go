@@ -542,7 +542,7 @@ func (h *Handler) DispatchPlanningTask(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.Queries.UpdateTaskStatus(r.Context(), db.UpdateTaskStatusParams{
 		ID:     task.ID,
-		Status: "in_progress",
+		Status: "running",
 	})
 	if err != nil {
 		slog.Warn("dispatch task failed", append(logger.RequestAttrs(r), "error", err)...)

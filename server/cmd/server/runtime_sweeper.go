@@ -166,10 +166,9 @@ func broadcastFailedTasks(ctx context.Context, queries *db.Queries, taskSvc *ser
 		if t.FailureReason.Valid && t.FailureReason.String != "" {
 			failureReason = t.FailureReason.String
 		}
-		workspaceID := ""
+		workspaceID := util.UUIDToString(t.WorkspaceID)
 		if t.IssueID.Valid {
 			if issue, err := queries.GetIssue(ctx, t.IssueID); err == nil {
-				workspaceID = util.UUIDToString(issue.WorkspaceID)
 				issueKey := util.UUIDToString(t.IssueID)
 				if issue.Status == "in_progress" && !processedIssues[issueKey] {
 					processedIssues[issueKey] = true

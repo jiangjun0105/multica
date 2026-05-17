@@ -32,6 +32,8 @@ func insertTask(ctx context.Context, pool *pgxpool.Pool, wsID pgtype.UUID, creat
 		status = "pending"
 	case "closed":
 		status = "done"
+	case "in_progress":
+		status = "running"
 	}
 
 	priority := meta.Priority

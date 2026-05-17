@@ -10,7 +10,7 @@ import (
 
 // TestListWorkspaceAgentTaskSnapshot covers the agent presence snapshot endpoint:
 // every active task (queued/dispatched/running) PLUS each agent's most recent
-// OUTCOME task (completed/failed only). Cancelled tasks are excluded by design
+// OUTCOME task (done/failed only). Cancelled tasks are excluded by design
 // from the outcome half — they're a procedural signal, not an outcome, and
 // must NOT mask a prior failure.
 //
@@ -40,12 +40,12 @@ func TestListWorkspaceAgentTaskSnapshot(t *testing.T) {
 		label       string
 	}
 	fixtures := []taskFixture{
-		// Agent A — actives + a newer completed supersedes an older failed.
+		// Agent A — actives + a newer done supersedes an older failed.
 		{agentA, "queued", "", "A.queued"},
 		{agentA, "dispatched", "", "A.dispatched"},
 		{agentA, "running", "", "A.running"},
 		{agentA, "failed", "now() - interval '10 minutes'", "A.old_failed"},
-		{agentA, "completed", "now() - interval '30 seconds'", "A.latest_completed"},
+		{agentA, "done", "now() - interval '30 seconds'", "A.latest_done"},
 
 		// Agent B — old failure with no later outcome stays visible (no
 		// time window).
@@ -60,24 +60,25 @@ func TestListWorkspaceAgentTaskSnapshot(t *testing.T) {
 	}
 
 	insertedIDs := make([]string, 0, len(fixtures))
-	for _, f := range fixtures {
+	for i, f := range fixtures {
 		var id string
 		var query string
+		num := int32(2001 + i)
 		if f.completedAt == "" {
-			query = `INSERT INTO task_run (agent_id, runtime_id, status, priority)
-			         VALUES ($1, $2, $3, 0) RETURNING id`
+			query = `INSERT INTO task (workspace_id, number, title, creator_type, creator_id, agent_id, runtime_id, status, queue_priority)
+			         VALUES ($1, $4, 'test-task', 'agent', $2, $2, $3, $5, 0) RETURNING id`
 		} else {
-			query = `INSERT INTO task_run (agent_id, runtime_id, status, priority, completed_at)
-			         VALUES ($1, $2, $3, 0, ` + f.completedAt + `) RETURNING id`
+			query = `INSERT INTO task (workspace_id, number, title, creator_type, creator_id, agent_id, runtime_id, status, queue_priority, completed_at)
+			         VALUES ($1, $4, 'test-task', 'agent', $2, $2, $3, $5, 0, ` + f.completedAt + `) RETURNING id`
 		}
-		if err := testPool.QueryRow(ctx, query, f.agentID, testRuntimeID, f.status).Scan(&id); err != nil {
+		if err := testPool.QueryRow(ctx, query, testWorkspaceID, f.agentID, testRuntimeID, num, f.status).Scan(&id); err != nil {
 			t.Fatalf("insert %s: %v", f.label, err)
 		}
 		insertedIDs = append(insertedIDs, id)
 	}
 	t.Cleanup(func() {
 		for _, id := range insertedIDs {
-			testPool.Exec(ctx, `DELETE FROM task_run WHERE id = $1`, id)
+			testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, id)
 		}
 	})
 
@@ -105,12 +106,12 @@ func TestListWorkspaceAgentTaskSnapshot(t *testing.T) {
 	}
 
 	wantCounts := map[key]int{
-		// Agent A: 3 actives + the latest outcome (completed). The older
+		// Agent A: 3 actives + the latest outcome (done). The older
 		// failed must be excluded by DISTINCT ON.
 		{agentA, "queued"}:     1,
 		{agentA, "dispatched"}: 1,
 		{agentA, "running"}:    1,
-		{agentA, "completed"}:  1,
+		{agentA, "done"}:       1,
 		// Agent B: just the failed outcome.
 		{agentB, "failed"}: 1,
 		// Agent C: the failed outcome must survive the temporally newer
@@ -126,7 +127,7 @@ func TestListWorkspaceAgentTaskSnapshot(t *testing.T) {
 
 	// The OLD failed terminal on agent A must be excluded.
 	if counts[key{agentA, "failed"}] != 0 {
-		t.Errorf("agent A old failed must be superseded by newer completed; got %d", counts[key{agentA, "failed"}])
+		t.Errorf("agent A old failed must be superseded by newer done; got %d", counts[key{agentA, "failed"}])
 	}
 
 	// No cancelled row may ever appear in the snapshot — they're filtered at
