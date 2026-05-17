@@ -21,26 +21,23 @@ import (
 // ---------------------------------------------------------------------------
 
 type PlanningTaskResponse struct {
-	ID           string  `json:"id"`
-	WorkspaceID  string  `json:"workspace_id"`
-	Number       int32   `json:"number"`
-	Title        string  `json:"title"`
-	Description  string  `json:"description"`
-	Status       string  `json:"status"`
-	Priority     string  `json:"priority"`
-	Suitability  *string `json:"suitability,omitempty"`
-	Branch       *string `json:"branch,omitempty"`
-	PR           *string `json:"pr,omitempty"`
-	ManualTest   *string `json:"manual_test,omitempty"`
-	IssueID      *string `json:"issue_id,omitempty"`
-	CurrentRunID *string `json:"current_run_id,omitempty"`
-	PipelineID     *string `json:"pipeline_id,omitempty"`
-	IsDraft        bool    `json:"is_draft"`
-	TransitionMode string  `json:"transition_mode"`
-	CreatorType    string  `json:"creator_type"`
-	CreatorID    string  `json:"creator_id"`
-	CreatedAt    string  `json:"created_at"`
-	UpdatedAt    string  `json:"updated_at"`
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspace_id"`
+	Number      int32   `json:"number"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Status      string  `json:"status"`
+	Priority    string  `json:"priority"`
+	Suitability *string `json:"suitability,omitempty"`
+	Branch      *string `json:"branch,omitempty"`
+	PR          *string `json:"pr,omitempty"`
+	ManualTest  *string `json:"manual_test,omitempty"`
+	IssueID     *string `json:"issue_id,omitempty"`
+	PipelineID  *string `json:"pipeline_id,omitempty"`
+	CreatorType string  `json:"creator_type"`
+	CreatorID   string  `json:"creator_id"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
 }
 
 func planningTaskToResponse(t db.Task) PlanningTaskResponse {
@@ -56,12 +53,9 @@ func planningTaskToResponse(t db.Task) PlanningTaskResponse {
 		Branch:       textToPtr(t.Branch),
 		PR:           textToPtr(t.Pr),
 		ManualTest:   textToPtr(t.ManualTest),
-		IssueID:      uuidToPtr(t.IssueID),
-		CurrentRunID: uuidToPtr(t.CurrentRunID),
-		PipelineID:     uuidToPtr(t.PipelineID),
-		IsDraft:        t.IsDraft,
-		TransitionMode: t.TransitionMode,
-		CreatorType:    t.CreatorType,
+		IssueID:    uuidToPtr(t.IssueID),
+		PipelineID: uuidToPtr(t.PipelineID),
+		CreatorType:  t.CreatorType,
 		CreatorID:    uuidToString(t.CreatorID),
 		CreatedAt:    timestampToString(t.CreatedAt),
 		UpdatedAt:    timestampToString(t.UpdatedAt),
@@ -106,8 +100,7 @@ type UpdatePlanningTaskRequest struct {
 	Branch       *string `json:"branch"`
 	PR           *string `json:"pr"`
 	ManualTest   *string `json:"manual_test"`
-	IssueID      *string `json:"issue_id"`
-	CurrentRunID *string `json:"current_run_id"`
+	IssueID *string `json:"issue_id"`
 }
 
 type TaskDependencyRequest struct {
@@ -120,11 +113,16 @@ type TaskDependencyRequest struct {
 // ---------------------------------------------------------------------------
 
 var validTaskStatuses = map[string]bool{
-	"pending":     true,
-	"in_progress": true,
-	"done":        true,
-	"blocked":     true,
-	"cancelled":   true,
+	"draft":           true,
+	"pending":         true,
+	"queued":          true,
+	"dispatched":      true,
+	"running":         true,
+	"human_reviewing": true,
+	"done":            true,
+	"failed":          true,
+	"blocked":         true,
+	"cancelled":       true,
 }
 
 var validTaskPriorities = map[string]bool{
@@ -404,15 +402,14 @@ func (h *Handler) UpdatePlanningTask(w http.ResponseWriter, r *http.Request) {
 	json.Unmarshal(bodyBytes, &rawFields)
 
 	params := db.UpdateTaskParams{
-		ID:           prevTask.ID,
-		WorkspaceID:  prevTask.WorkspaceID,
-		Suitability:  prevTask.Suitability,
-		Branch:       prevTask.Branch,
-		Pr:           prevTask.Pr,
-		ManualTest:   prevTask.ManualTest,
-		IssueID:      prevTask.IssueID,
-		CurrentRunID: prevTask.CurrentRunID,
-		PipelineID:   prevTask.PipelineID,
+		ID:          prevTask.ID,
+		WorkspaceID: prevTask.WorkspaceID,
+		Suitability: prevTask.Suitability,
+		Branch:      prevTask.Branch,
+		Pr:          prevTask.Pr,
+		ManualTest:  prevTask.ManualTest,
+		IssueID:     prevTask.IssueID,
+		PipelineID:  prevTask.PipelineID,
 	}
 
 	if req.Title != nil {
@@ -478,18 +475,6 @@ func (h *Handler) UpdatePlanningTask(w http.ResponseWriter, r *http.Request) {
 			params.IssueID = pgtype.UUID{Valid: false}
 		}
 	}
-	if _, ok := rawFields["current_run_id"]; ok {
-		if req.CurrentRunID != nil {
-			rid, ok := parseUUIDOrBadRequest(w, *req.CurrentRunID, "current_run_id")
-			if !ok {
-				return
-			}
-			params.CurrentRunID = rid
-		} else {
-			params.CurrentRunID = pgtype.UUID{Valid: false}
-		}
-	}
-
 	task, err := h.Queries.UpdateTask(r.Context(), params)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

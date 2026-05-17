@@ -383,7 +383,7 @@ func (h *Handler) ListPendingChatTasks(w http.ResponseWriter, r *http.Request) {
 	items := make([]PendingChatTaskItem, len(rows))
 	for i, row := range rows {
 		items[i] = PendingChatTaskItem{
-			TaskID:        uuidToString(row.IssueID),
+			TaskID:        uuidToString(row.TaskID),
 			Status:        row.Status,
 			ChatSessionID: uuidToString(row.ChatSessionID),
 		}
@@ -531,7 +531,7 @@ func chatMessageToResponse(m db.ChatMessage) ChatMessageResponse {
 		ChatSessionID: uuidToString(m.ChatSessionID),
 		Role:          m.Role,
 		Content:       m.Content,
-		TaskID:        uuidToPtr(m.IssueID),
+		TaskID:        uuidToPtr(m.TaskID),
 		CreatedAt:     timestampToString(m.CreatedAt),
 		FailureReason: textToPtr(m.FailureReason),
 		ElapsedMs:     int8ToPtr(m.ElapsedMs),

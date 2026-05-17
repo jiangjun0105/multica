@@ -882,7 +882,7 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		if !task.ForceFreshSession {
 			if prior, err := h.Queries.GetLastTaskSession(r.Context(), db.GetLastTaskSessionParams{
 				AgentID: task.AgentID,
-				TaskID:  task.IssueID,
+				IssueID: task.IssueID,
 			}); err == nil && prior.SessionID.Valid {
 				if prior.RuntimeID == task.RuntimeID {
 					resp.PriorSessionID = prior.SessionID.String

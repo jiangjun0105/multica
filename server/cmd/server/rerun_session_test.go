@@ -84,7 +84,7 @@ func TestGetLastTaskSessionExcludesPoisonedFailures(t *testing.T) {
 	queries := db.New(testPool)
 	prior, err := queries.GetLastTaskSession(ctx, db.GetLastTaskSessionParams{
 		AgentID: pgtype.UUID{Bytes: parseUUIDBytes(agentID), Valid: true},
-		TaskID:  pgtype.UUID{Bytes: parseUUIDBytes(issueID), Valid: true},
+		IssueID: pgtype.UUID{Bytes: parseUUIDBytes(issueID), Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("GetLastTaskSession failed: %v", err)
@@ -122,7 +122,7 @@ func TestGetLastTaskSessionFallbackPoisonedClassifier(t *testing.T) {
 	queries := db.New(testPool)
 	prior, err := queries.GetLastTaskSession(ctx, db.GetLastTaskSessionParams{
 		AgentID: pgtype.UUID{Bytes: parseUUIDBytes(agentID), Valid: true},
-		TaskID:  pgtype.UUID{Bytes: parseUUIDBytes(issueID), Valid: true},
+		IssueID: pgtype.UUID{Bytes: parseUUIDBytes(issueID), Valid: true},
 	})
 	if err == nil && prior.SessionID.Valid {
 		t.Fatalf("expected no resumable session, got %q", prior.SessionID.String)

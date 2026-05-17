@@ -47,8 +47,8 @@ func (a *dbScopeAuthorizer) AuthorizeScope(ctx context.Context, userID, workspac
 			return false, nil
 		}
 		// Issue tasks: visible to any workspace member.
-		if task.TaskID.Valid {
-			issue, err := a.q.GetIssue(ctx, task.TaskID)
+		if task.IssueID.Valid {
+			issue, err := a.q.GetIssue(ctx, task.IssueID)
 			if err != nil {
 				return false, nil
 			}
