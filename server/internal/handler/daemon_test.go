@@ -165,14 +165,14 @@ func TestGetTaskStatus_WithDaemonToken_CrossWorkspace(t *testing.T) {
 	}
 
 	err = testPool.QueryRow(context.Background(), `
-		INSERT INTO task_run (agent_id, task_id, status, runtime_id)
-		VALUES ($1, $2, 'queued', $3)
+		INSERT INTO task (agent_id, issue_id, status, runtime_id, workspace_id, number, title, creator_type, creator_id)
+		VALUES ($1, $2, 'queued', $3, $4, 1001, 'test-task', 'agent', $1)
 		RETURNING id
-	`, agentID, issueID, runtimeID).Scan(&taskID)
+	`, agentID, issueID, runtimeID, testWorkspaceID).Scan(&taskID)
 	if err != nil {
 		t.Fatalf("setup: create task: %v", err)
 	}
-	defer testPool.Exec(context.Background(), `DELETE FROM task_run WHERE id = $1`, taskID)
+	defer testPool.Exec(context.Background(), `DELETE FROM task WHERE id = $1`, taskID)
 
 	// Try GetTaskStatus with a daemon token from a DIFFERENT workspace — should fail.
 	w := httptest.NewRecorder()
@@ -326,10 +326,10 @@ func setupForeignWorkspaceFixture(t *testing.T) (string, string) {
 
 	var taskID string
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO task_run (agent_id, task_id, status, runtime_id)
-		VALUES ($1, $2, 'queued', $3)
+		INSERT INTO task (agent_id, issue_id, status, runtime_id, workspace_id, number, title, creator_type, creator_id)
+		VALUES ($1, $2, 'queued', $3, $4, 1002, 'test-task', 'agent', $1)
 		RETURNING id
-	`, agentID, issueID, runtimeID).Scan(&taskID); err != nil {
+	`, agentID, issueID, runtimeID, foreignWorkspaceID).Scan(&taskID); err != nil {
 		t.Fatalf("setup: create foreign task: %v", err)
 	}
 
@@ -378,7 +378,7 @@ func TestCancelTask_CrossWorkspace_Returns404(t *testing.T) {
 	// The foreign task must not have been cancelled.
 	var status string
 	if err := testPool.QueryRow(context.Background(),
-		`SELECT status FROM task_run WHERE id = $1`, foreignTaskID,
+		`SELECT status FROM task WHERE id = $1`, foreignTaskID,
 	).Scan(&status); err != nil {
 		t.Fatalf("read foreign task status: %v", err)
 	}
@@ -418,13 +418,13 @@ func TestCancelTask_TaskBelongsToDifferentIssue_Returns404(t *testing.T) {
 	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, issueXID) })
 
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO task_run (agent_id, task_id, status, runtime_id)
-		VALUES ($1, $2, 'queued', $3)
+		INSERT INTO task (agent_id, issue_id, status, runtime_id, workspace_id, number, title, creator_type, creator_id)
+		VALUES ($1, $2, 'queued', $3, $4, 1003, 'test-task', 'agent', $1)
 		RETURNING id
-	`, agentID, issueXID, runtimeID).Scan(&taskID); err != nil {
+	`, agentID, issueXID, runtimeID, testWorkspaceID).Scan(&taskID); err != nil {
 		t.Fatalf("setup: create task: %v", err)
 	}
-	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM task_run WHERE id = $1`, taskID) })
+	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM task WHERE id = $1`, taskID) })
 
 	// Issue Y — a sibling in the same workspace, used only as the URL cover.
 	var issueYID string
@@ -448,7 +448,7 @@ func TestCancelTask_TaskBelongsToDifferentIssue_Returns404(t *testing.T) {
 
 	var status string
 	if err := testPool.QueryRow(ctx,
-		`SELECT status FROM task_run WHERE id = $1`, taskID,
+		`SELECT status FROM task WHERE id = $1`, taskID,
 	).Scan(&status); err != nil {
 		t.Fatalf("read task status: %v", err)
 	}
@@ -485,13 +485,13 @@ func TestCancelTask_SameIssue_Succeeds(t *testing.T) {
 	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, issueID) })
 
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO task_run (agent_id, task_id, status, runtime_id)
-		VALUES ($1, $2, 'queued', $3)
+		INSERT INTO task (agent_id, issue_id, status, runtime_id, workspace_id, number, title, creator_type, creator_id)
+		VALUES ($1, $2, 'queued', $3, $4, 1004, 'test-task', 'agent', $1)
 		RETURNING id
-	`, agentID, issueID, runtimeID).Scan(&taskID); err != nil {
+	`, agentID, issueID, runtimeID, testWorkspaceID).Scan(&taskID); err != nil {
 		t.Fatalf("setup: create task: %v", err)
 	}
-	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM task_run WHERE id = $1`, taskID) })
+	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM task WHERE id = $1`, taskID) })
 
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/issues/"+issueID+"/tasks/"+taskID+"/cancel", nil)
@@ -707,14 +707,14 @@ func TestDaemonRegister_MergesLegacyDaemonIDRuntime(t *testing.T) {
 	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, legacyIssueID) })
 
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO task_run (agent_id, task_id, status, runtime_id)
-		VALUES ($1, $2, 'completed', $3)
+		INSERT INTO task (agent_id, issue_id, status, runtime_id, workspace_id, number, title, creator_type, creator_id)
+		VALUES ($1, $2, 'done', $3, $4, 1005, 'test-task', 'agent', $1)
 		RETURNING id
-	`, legacyAgentID, legacyIssueID, legacyRuntimeID).Scan(&legacyTaskID); err != nil {
+	`, legacyAgentID, legacyIssueID, legacyRuntimeID, testWorkspaceID).Scan(&legacyTaskID); err != nil {
 		t.Fatalf("seed legacy task: %v", err)
 	}
 	t.Cleanup(func() {
-		testPool.Exec(context.Background(), `DELETE FROM task_run WHERE id = $1`, legacyTaskID)
+		testPool.Exec(context.Background(), `DELETE FROM task WHERE id = $1`, legacyTaskID)
 	})
 
 	// Register under the new stable UUID, declaring the prior hostname-derived
@@ -759,7 +759,7 @@ func TestDaemonRegister_MergesLegacyDaemonIDRuntime(t *testing.T) {
 
 	// Task should be reassigned (not dropped).
 	var taskRuntimeID string
-	if err := testPool.QueryRow(ctx, `SELECT runtime_id FROM task_run WHERE id = $1`, legacyTaskID).Scan(&taskRuntimeID); err != nil {
+	if err := testPool.QueryRow(ctx, `SELECT runtime_id FROM task WHERE id = $1`, legacyTaskID).Scan(&taskRuntimeID); err != nil {
 		t.Fatalf("read task runtime_id: %v", err)
 	}
 	if taskRuntimeID != newRuntimeID {
@@ -1097,13 +1097,13 @@ func TestClaimTaskByRuntime_TaskWorkspaceMismatch_CancelsAndRejects(t *testing.T
 	// bug would produce.
 	var taskID string
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority)
-		VALUES ($1, $2, $3, 'queued', 2)
+		INSERT INTO task (agent_id, runtime_id, issue_id, status, queue_priority, workspace_id, number, title, creator_type, creator_id)
+		VALUES ($1, $2, $3, 'queued', 2, $4, 1006, 'test-task', 'agent', $1)
 		RETURNING id
-	`, localAgentID, localRuntimeID, foreignIssueID).Scan(&taskID); err != nil {
+	`, localAgentID, localRuntimeID, foreignIssueID, testWorkspaceID).Scan(&taskID); err != nil {
 		t.Fatalf("setup: create mismatched task: %v", err)
 	}
-	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM task_run WHERE id = $1`, taskID) })
+	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM task WHERE id = $1`, taskID) })
 
 	w := httptest.NewRecorder()
 	req := newDaemonTokenRequest("POST", "/api/daemon/runtimes/"+localRuntimeID+"/claim", nil,
@@ -1121,7 +1121,7 @@ func TestClaimTaskByRuntime_TaskWorkspaceMismatch_CancelsAndRejects(t *testing.T
 	// is released immediately rather than stuck until the sweeper fires.
 	var status string
 	if err := testPool.QueryRow(ctx,
-		`SELECT status FROM task_run WHERE id = $1`, taskID,
+		`SELECT status FROM task WHERE id = $1`, taskID,
 	).Scan(&status); err != nil {
 		t.Fatalf("read task status: %v", err)
 	}
@@ -1173,16 +1173,17 @@ func TestCompleteTask_CommentTriggered_SynthesizesCommentWhenAgentSilent(t *test
 	// Comment-triggered, already running (as CompleteAgentTask requires).
 	var taskID string
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO task_run (
-			agent_id, runtime_id, task_id, trigger_comment_id,
-			status, priority, started_at
+		INSERT INTO task (
+			agent_id, runtime_id, issue_id, trigger_comment_id,
+			status, queue_priority, started_at,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, $4, 'running', 0, now())
+		VALUES ($1, $2, $3, $4, 'running', 0, now(), $5, 1007, 'test-task', 'agent', $1)
 		RETURNING id
-	`, agentID, runtimeID, issueID, triggerCommentID).Scan(&taskID); err != nil {
+	`, agentID, runtimeID, issueID, triggerCommentID, testWorkspaceID).Scan(&taskID); err != nil {
 		t.Fatalf("setup: create comment-triggered task: %v", err)
 	}
-	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task_run WHERE id = $1`, taskID) })
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, taskID) })
 
 	const agentFinalOutput = "sure, will look into it shortly"
 
@@ -1275,16 +1276,17 @@ func TestCompleteTask_CommentTriggered_SkipsSynthesisWhenAgentAlreadyCommented(t
 
 	var taskID string
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO task_run (
-			agent_id, runtime_id, task_id, trigger_comment_id,
-			status, priority, started_at
+		INSERT INTO task (
+			agent_id, runtime_id, issue_id, trigger_comment_id,
+			status, queue_priority, started_at,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, $4, 'running', 0, now())
+		VALUES ($1, $2, $3, $4, 'running', 0, now(), $5, 1008, 'test-task', 'agent', $1)
 		RETURNING id
-	`, agentID, runtimeID, issueID, triggerCommentID).Scan(&taskID); err != nil {
+	`, agentID, runtimeID, issueID, triggerCommentID, testWorkspaceID).Scan(&taskID); err != nil {
 		t.Fatalf("setup: create comment-triggered task: %v", err)
 	}
-	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task_run WHERE id = $1`, taskID) })
+	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, taskID) })
 
 	// Agent posts its own reply during the run — exactly the compliant path.
 	if _, err := testPool.Exec(ctx, `
@@ -1436,7 +1438,7 @@ func TestChatSessionRuntimeBackfillRequiresMatchingSessionID(t *testing.T) {
 		t.Fatalf("setup temp chat_session table: %v", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		CREATE TEMP TABLE task_run (
+		CREATE TEMP TABLE task (
 			chat_session_id uuid,
 			runtime_id uuid,
 			session_id text,
@@ -1447,7 +1449,7 @@ func TestChatSessionRuntimeBackfillRequiresMatchingSessionID(t *testing.T) {
 			created_at timestamptz
 		) ON COMMIT DROP;
 	`); err != nil {
-		t.Fatalf("setup temp task_run table: %v", err)
+		t.Fatalf("setup temp task table: %v", err)
 	}
 
 	const (
@@ -1466,16 +1468,16 @@ func TestChatSessionRuntimeBackfillRequiresMatchingSessionID(t *testing.T) {
 		t.Fatalf("seed temp chat sessions: %v", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO task_run (
+		INSERT INTO task (
 			chat_session_id, runtime_id, session_id, status,
 			completed_at, started_at, dispatched_at, created_at
 		)
 		VALUES
-			($1, $3, 'old-runtime-session', 'completed',
+			($1, $3, 'old-runtime-session', 'done',
 			 now() - interval '2 hours', now() - interval '2 hours', now() - interval '2 hours', now() - interval '2 hours'),
-			($1, $4, 'new-runtime-session', 'completed',
+			($1, $4, 'new-runtime-session', 'done',
 			 now() - interval '1 hour', now() - interval '1 hour', now() - interval '1 hour', now() - interval '1 hour'),
-			($2, $4, 'matched-runtime-session', 'completed',
+			($2, $4, 'matched-runtime-session', 'done',
 			 now() - interval '30 minutes', now() - interval '30 minutes', now() - interval '30 minutes', now() - interval '30 minutes');
 	`, poisonedChatID, matchedChatID, oldRuntimeID, newRuntimeID); err != nil {
 		t.Fatalf("seed temp task sessions: %v", err)
@@ -1489,10 +1491,10 @@ func TestChatSessionRuntimeBackfillRequiresMatchingSessionID(t *testing.T) {
 				chat_session_id,
 				runtime_id,
 				session_id
-			FROM task_run
+			FROM task
 			WHERE chat_session_id IS NOT NULL
 			  AND session_id IS NOT NULL
-			  AND status IN ('completed', 'failed')
+			  AND status IN ('done', 'failed')
 			ORDER BY chat_session_id, COALESCE(completed_at, started_at, dispatched_at, created_at) DESC
 		) latest
 		WHERE latest.chat_session_id = cs.id
@@ -1543,22 +1545,24 @@ func TestClaimTask_IssuePriorSessionRuntimeGuard(t *testing.T) {
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, skipIssueID) })
 
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (
-			agent_id, runtime_id, task_id,
-			status, priority, started_at, completed_at,
-			session_id, work_dir
+		INSERT INTO task (
+			agent_id, runtime_id, issue_id,
+			status, queue_priority, started_at, completed_at,
+			session_id, work_dir,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, 'completed', 0, now(), now(), 'old-runtime-session', '/tmp/old-runtime-workdir')
-	`, agentID, oldRuntimeID, skipIssueID); err != nil {
+		VALUES ($1, $2, $3, 'done', 0, now(), now(), 'old-runtime-session', '/tmp/old-runtime-workdir', $4, 1009, 'test-task', 'agent', $1)
+	`, agentID, oldRuntimeID, skipIssueID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create old-runtime prior task: %v", err)
 	}
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (
-			agent_id, runtime_id, task_id,
-			status, priority
+		INSERT INTO task (
+			agent_id, runtime_id, issue_id,
+			status, queue_priority,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, 'queued', 0)
-	`, agentID, runtimeID, skipIssueID); err != nil {
+		VALUES ($1, $2, $3, 'queued', 0, $4, 1010, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, skipIssueID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create current-runtime task: %v", err)
 	}
 
@@ -1570,9 +1574,9 @@ func TestClaimTask_IssuePriorSessionRuntimeGuard(t *testing.T) {
 		t.Fatalf("runtime mismatch: expected PriorWorkDir='/tmp/old-runtime-workdir', got %q", task.PriorWorkDir)
 	}
 	if _, err := testPool.Exec(ctx, `
-		UPDATE task_run
-		SET status = 'completed', completed_at = now()
-		WHERE task_id = $1 AND status IN ('dispatched', 'running')
+		UPDATE task
+		SET status = 'done', completed_at = now()
+		WHERE issue_id = $1 AND status IN ('dispatched', 'running')
 	`, skipIssueID); err != nil {
 		t.Fatalf("setup: complete claimed skip task: %v", err)
 	}
@@ -1588,22 +1592,24 @@ func TestClaimTask_IssuePriorSessionRuntimeGuard(t *testing.T) {
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, resumeIssueID) })
 
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (
-			agent_id, runtime_id, task_id,
-			status, priority, started_at, completed_at,
-			session_id, work_dir
+		INSERT INTO task (
+			agent_id, runtime_id, issue_id,
+			status, queue_priority, started_at, completed_at,
+			session_id, work_dir,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, 'completed', 0, now(), now(), 'same-runtime-session', '/tmp/same-runtime-workdir')
-	`, agentID, runtimeID, resumeIssueID); err != nil {
+		VALUES ($1, $2, $3, 'done', 0, now(), now(), 'same-runtime-session', '/tmp/same-runtime-workdir', $4, 1011, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, resumeIssueID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create same-runtime prior task: %v", err)
 	}
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (
-			agent_id, runtime_id, task_id,
-			status, priority
+		INSERT INTO task (
+			agent_id, runtime_id, issue_id,
+			status, queue_priority,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, 'queued', 0)
-	`, agentID, runtimeID, resumeIssueID); err != nil {
+		VALUES ($1, $2, $3, 'queued', 0, $4, 1012, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, resumeIssueID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create same-runtime task: %v", err)
 	}
 
@@ -1640,22 +1646,24 @@ func TestClaimTask_ChatPriorSessionRuntimeGuard(t *testing.T) {
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM chat_session WHERE id = $1`, skipSessionID) })
 
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (
+		INSERT INTO task (
 			agent_id, runtime_id, chat_session_id,
-			status, priority, started_at, completed_at,
-			session_id, work_dir
+			status, queue_priority, started_at, completed_at,
+			session_id, work_dir,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, 'completed', 0, now(), now(), 'old-chat-session', '/tmp/old-chat-workdir')
-	`, agentID, oldRuntimeID, skipSessionID); err != nil {
+		VALUES ($1, $2, $3, 'done', 0, now(), now(), 'old-chat-session', '/tmp/old-chat-workdir', $4, 1013, 'test-task', 'agent', $1)
+	`, agentID, oldRuntimeID, skipSessionID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create old-runtime chat task: %v", err)
 	}
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (
+		INSERT INTO task (
 			agent_id, runtime_id, chat_session_id,
-			status, priority
+			status, queue_priority,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, 'queued', 0)
-	`, agentID, runtimeID, skipSessionID); err != nil {
+		VALUES ($1, $2, $3, 'queued', 0, $4, 1014, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, skipSessionID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create current-runtime chat task: %v", err)
 	}
 
@@ -1667,8 +1675,8 @@ func TestClaimTask_ChatPriorSessionRuntimeGuard(t *testing.T) {
 		t.Fatalf("chat runtime mismatch: expected PriorWorkDir='/tmp/old-chat-workdir', got %q", task.PriorWorkDir)
 	}
 	if _, err := testPool.Exec(ctx, `
-		UPDATE task_run
-		SET status = 'completed', completed_at = now()
+		UPDATE task
+		SET status = 'done', completed_at = now()
 		WHERE chat_session_id = $1 AND status IN ('dispatched', 'running')
 	`, skipSessionID); err != nil {
 		t.Fatalf("setup: complete claimed skip chat task: %v", err)
@@ -1688,12 +1696,13 @@ func TestClaimTask_ChatPriorSessionRuntimeGuard(t *testing.T) {
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM chat_session WHERE id = $1`, resumeSessionID) })
 
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (
+		INSERT INTO task (
 			agent_id, runtime_id, chat_session_id,
-			status, priority
+			status, queue_priority,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, 'queued', 0)
-	`, agentID, runtimeID, resumeSessionID); err != nil {
+		VALUES ($1, $2, $3, 'queued', 0, $4, 1015, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, resumeSessionID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create same-runtime chat task: %v", err)
 	}
 
@@ -1733,22 +1742,24 @@ func TestClaimTask_ChatLegacyNullRuntimeFallsBackToTaskRow(t *testing.T) {
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM chat_session WHERE id = $1`, legacySessionID) })
 
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (
+		INSERT INTO task (
 			agent_id, runtime_id, chat_session_id,
-			status, priority, started_at, completed_at,
-			session_id, work_dir
+			status, queue_priority, started_at, completed_at,
+			session_id, work_dir,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, 'completed', 0, now(), now(), 'legacy-fallback-session', '/tmp/legacy-fallback-workdir')
-	`, agentID, runtimeID, legacySessionID); err != nil {
+		VALUES ($1, $2, $3, 'done', 0, now(), now(), 'legacy-fallback-session', '/tmp/legacy-fallback-workdir', $4, 1016, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, legacySessionID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create matching-runtime prior task: %v", err)
 	}
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (
+		INSERT INTO task (
 			agent_id, runtime_id, chat_session_id,
-			status, priority
+			status, queue_priority,
+			workspace_id, number, title, creator_type, creator_id
 		)
-		VALUES ($1, $2, $3, 'queued', 0)
-	`, agentID, runtimeID, legacySessionID); err != nil {
+		VALUES ($1, $2, $3, 'queued', 0, $4, 1017, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, legacySessionID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create current chat task: %v", err)
 	}
 
@@ -1814,22 +1825,24 @@ func TestClaimTask_BlockedByDependency_Skipped(t *testing.T) {
 	}
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, blockedIssueID) })
 
-	// Create task records in the task table for both issues.
+	// Create a blocker task (running) and a blocked task (queued, with dependency).
 	var blockerTaskID, blockedTaskID string
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO task (workspace_id, number, title, status, issue_id, creator_type, creator_id)
-		VALUES ($1, 92001, 'blocker-task', 'in_progress', $2, 'member', $3)
+		INSERT INTO task (workspace_id, number, title, status, issue_id, creator_type, creator_id,
+		                  agent_id, runtime_id)
+		VALUES ($1, 92001, 'blocker-task', 'running', $2, 'member', $3, $4, $5)
 		RETURNING id
-	`, testWorkspaceID, blockerIssueID, testUserID).Scan(&blockerTaskID); err != nil {
+	`, testWorkspaceID, blockerIssueID, testUserID, agentID, runtimeID).Scan(&blockerTaskID); err != nil {
 		t.Fatalf("setup: create blocker task: %v", err)
 	}
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, blockerTaskID) })
 
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO task (workspace_id, number, title, status, issue_id, creator_type, creator_id)
-		VALUES ($1, 92002, 'blocked-task', 'pending', $2, 'member', $3)
+		INSERT INTO task (workspace_id, number, title, status, issue_id, creator_type, creator_id,
+		                  agent_id, runtime_id, queue_priority)
+		VALUES ($1, 92002, 'blocked-task', 'queued', $2, 'agent', $3, $3, $4, 2)
 		RETURNING id
-	`, testWorkspaceID, blockedIssueID, testUserID).Scan(&blockedTaskID); err != nil {
+	`, testWorkspaceID, blockedIssueID, agentID, runtimeID).Scan(&blockedTaskID); err != nil {
 		t.Fatalf("setup: create blocked task: %v", err)
 	}
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, blockedTaskID) })
@@ -1843,17 +1856,6 @@ func TestClaimTask_BlockedByDependency_Skipped(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		testPool.Exec(ctx, `DELETE FROM task_dependency WHERE task_id = $1`, blockedTaskID)
-	})
-
-	// Enqueue a task_run for the blocked issue.
-	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority)
-		VALUES ($1, $2, $3, 'queued', 2)
-	`, agentID, runtimeID, blockedIssueID); err != nil {
-		t.Fatalf("setup: create blocked task_run: %v", err)
-	}
-	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1 AND agent_id = $2`, blockedIssueID, agentID)
 	})
 
 	// Claim should return nil — the only queued task is blocked.
@@ -1900,13 +1902,13 @@ func TestClaimTask_NoDependency_NotBlocked(t *testing.T) {
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, taskID) })
 
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority)
-		VALUES ($1, $2, $3, 'queued', 2)
-	`, agentID, runtimeID, issueID); err != nil {
+		INSERT INTO task (agent_id, runtime_id, issue_id, status, queue_priority, workspace_id, number, title, creator_type, creator_id)
+		VALUES ($1, $2, $3, 'queued', 2, $4, 1019, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, issueID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create task_run: %v", err)
 	}
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1 AND agent_id = $2`, issueID, agentID)
+		testPool.Exec(ctx, `DELETE FROM task WHERE issue_id = $1 AND agent_id = $2`, issueID, agentID)
 	})
 
 	claimTaskForRuntimeGuard(t, runtimeID, daemonID)
@@ -1931,15 +1933,15 @@ func TestClaimTask_ChatTask_NotAffectedByBlockedByFilter(t *testing.T) {
 	}
 	t.Cleanup(func() { testPool.Exec(ctx, `DELETE FROM chat_session WHERE id = $1`, chatSessionID) })
 
-	// Enqueue a chat task (task_id IS NULL, chat_session_id is set).
+	// Enqueue a chat task (issue_id IS NULL, chat_session_id is set).
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, chat_session_id)
-		VALUES ($1, $2, NULL, 'queued', 2, $3)
-	`, agentID, runtimeID, chatSessionID); err != nil {
+		INSERT INTO task (agent_id, runtime_id, issue_id, status, queue_priority, chat_session_id, workspace_id, number, title, creator_type, creator_id)
+		VALUES ($1, $2, NULL, 'queued', 2, $3, $4, 1020, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, chatSessionID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create chat task_run: %v", err)
 	}
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM task_run WHERE chat_session_id = $1 AND agent_id = $2`, chatSessionID, agentID)
+		testPool.Exec(ctx, `DELETE FROM task WHERE chat_session_id = $1 AND agent_id = $2`, chatSessionID, agentID)
 	})
 
 	// Chat task should be claimable regardless of any task_dependency entries.
@@ -2004,13 +2006,13 @@ func TestClaimTask_BlockerDone_Unblocked(t *testing.T) {
 	})
 
 	if _, err := testPool.Exec(ctx, `
-		INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority)
-		VALUES ($1, $2, $3, 'queued', 2)
-	`, agentID, runtimeID, blockedIssueID); err != nil {
+		INSERT INTO task (agent_id, runtime_id, issue_id, status, queue_priority, workspace_id, number, title, creator_type, creator_id)
+		VALUES ($1, $2, $3, 'queued', 2, $4, 1021, 'test-task', 'agent', $1)
+	`, agentID, runtimeID, blockedIssueID, testWorkspaceID); err != nil {
 		t.Fatalf("setup: create task_run: %v", err)
 	}
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM task_run WHERE task_id = $1 AND agent_id = $2`, blockedIssueID, agentID)
+		testPool.Exec(ctx, `DELETE FROM task WHERE issue_id = $1 AND agent_id = $2`, blockedIssueID, agentID)
 	})
 
 	// Blocker is already done, so the blocked task should be claimable.

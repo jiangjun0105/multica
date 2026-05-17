@@ -240,7 +240,7 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 			taskUUID, parseErr := util.ParseUUID(taskIDHeader)
 			if parseErr == nil {
 				task, err := h.Queries.GetAgentTask(r.Context(), taskUUID)
-				if err == nil && task.TriggerCommentID.Valid && uuidToString(task.TaskID) == uuidToString(issue.ID) {
+				if err == nil && task.TriggerCommentID.Valid && uuidToString(task.IssueID) == uuidToString(issue.ID) {
 					if uuidToString(parentID) != uuidToString(task.TriggerCommentID) {
 						writeError(w, http.StatusConflict,
 							"parent_id must equal this task's trigger comment id ("+uuidToString(task.TriggerCommentID)+")")
@@ -481,7 +481,7 @@ func (h *Handler) enqueueMentionedAgentTasks(ctx context.Context, issue db.Issue
 		}
 		// Dedup: skip if this agent already has a pending task for this issue.
 		hasPending, err := h.Queries.HasPendingTaskForIssueAndAgent(ctx, db.HasPendingTaskForIssueAndAgentParams{
-			TaskID:  issue.ID,
+			IssueID: issue.ID,
 			AgentID: agentUUID,
 		})
 		if err != nil || hasPending {

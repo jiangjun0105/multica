@@ -12,9 +12,8 @@ import (
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
-// mockRow implements pgx.Row, returning either a scanned task or pgx.ErrNoRows.
 type mockRow struct {
-	task *db.TaskRun
+	task *db.Task
 	err  error
 }
 
@@ -24,17 +23,23 @@ func (r *mockRow) Scan(dest ...any) error {
 	}
 	t := r.task
 	ptrs := []any{
-		&t.ID, &t.AgentID, &t.TaskID, &t.Status, &t.Priority,
+		&t.ID, &t.WorkspaceID, &t.Number, &t.Title, &t.Description,
+		&t.Status, &t.Priority, &t.Suitability, &t.Branch, &t.Pr,
+		&t.ManualTest, &t.IssueID, &t.CreatorType, &t.CreatorID,
+		&t.CreatedAt, &t.UpdatedAt, &t.PipelineID,
+		&t.AgentID, &t.RuntimeID, &t.SessionID, &t.WorkDir,
 		&t.DispatchedAt, &t.StartedAt, &t.CompletedAt, &t.Result,
-		&t.Error, &t.CreatedAt, &t.Context, &t.RuntimeID,
-		&t.SessionID, &t.WorkDir, &t.TriggerCommentID,
-		&t.ChatSessionID,
+		&t.Error, &t.FailureReason, &t.Attempt, &t.MaxAttempts,
+		&t.LastHeartbeatAt, &t.ParentTaskID, &t.Context,
+		&t.TriggerCommentID, &t.TriggerSummary, &t.ChatSessionID,
+		&t.ForceFreshSession, &t.QueuePriority,
+		&t.Config, &t.CurrentTurn, &t.MaxTurns, &t.CrewTurn,
+		&t.ActiveAgentID, &t.WaitingFor,
 	}
 	for i, p := range ptrs {
 		if i >= len(dest) {
 			break
 		}
-		// Copy value from source to dest by assigning through the pointer.
 		switch d := dest[i].(type) {
 		case *pgtype.UUID:
 			*d = *(p.(*pgtype.UUID))
@@ -48,15 +53,15 @@ func (r *mockRow) Scan(dest ...any) error {
 			*d = *(p.(*[]byte))
 		case *pgtype.Text:
 			*d = *(p.(*pgtype.Text))
+		case *bool:
+			*d = *(p.(*bool))
 		}
 	}
 	return nil
 }
 
-// mockDBTX routes QueryRow calls: complete/fail queries return ErrNoRows,
-// getAgentTask returns the stored task.
 type mockDBTX struct {
-	task db.TaskRun
+	task db.Task
 }
 
 func (m *mockDBTX) Exec(_ context.Context, _ string, _ ...interface{}) (pgconn.CommandTag, error) {
@@ -68,11 +73,9 @@ func (m *mockDBTX) Query(_ context.Context, _ string, _ ...interface{}) (pgx.Row
 }
 
 func (m *mockDBTX) QueryRow(_ context.Context, sql string, _ ...interface{}) pgx.Row {
-	// CompleteAgentTask and FailAgentTask SQL contain "SET status ="
 	if strings.Contains(sql, "SET status =") {
 		return &mockRow{err: pgx.ErrNoRows}
 	}
-	// GetAgentTask — return the existing task
 	return &mockRow{task: &m.task}
 }
 
@@ -91,14 +94,14 @@ func TestCompleteTask_AlreadyFinalized(t *testing.T) {
 		name   string
 		status string
 	}{
-		{"already completed", "completed"},
+		{"already done", "done"},
 		{"already cancelled", "cancelled"},
 		{"already failed", "failed"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := &mockDBTX{task: db.TaskRun{
+			mock := &mockDBTX{task: db.Task{
 				ID:      taskID,
 				AgentID: agentID,
 				Status:  tt.status,
@@ -133,14 +136,14 @@ func TestFailTask_AlreadyFinalized(t *testing.T) {
 		name   string
 		status string
 	}{
-		{"already completed", "completed"},
+		{"already done", "done"},
 		{"already cancelled", "cancelled"},
 		{"already failed", "failed"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := &mockDBTX{task: db.TaskRun{
+			mock := &mockDBTX{task: db.Task{
 				ID:      taskID,
 				AgentID: agentID,
 				Status:  tt.status,

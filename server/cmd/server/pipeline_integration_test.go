@@ -284,7 +284,7 @@ func TestPipelineStatusRollup(t *testing.T) {
 		t.Fatalf("expected pipeline status 'running' after dispatch, got '%s'", p["status"])
 	}
 
-	// Complete all 3 tasks → pipeline should become "completed"
+	// Complete all 3 tasks → pipeline should become "done"
 	for _, tid := range taskIDs {
 		resp := authRequest(t, "PATCH", "/api/tasks/"+tid+"?workspace_id="+testWorkspaceID, map[string]any{
 			"status": "done",
@@ -327,7 +327,7 @@ func TestCreatePipeline_HappyPath_NoIssue(t *testing.T) {
 		"status":   "running",
 		"tasks": []map[string]any{
 			{"title": "Setup", "status": "done"},
-			{"title": "Build", "status": "in_progress", "depends_on": []int{0}},
+			{"title": "Build", "status": "running", "depends_on": []int{0}},
 			{"title": "Ship", "status": "pending", "depends_on": []int{1}},
 		},
 	})

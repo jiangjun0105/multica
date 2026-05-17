@@ -40,7 +40,7 @@ func countPendingTasks(t *testing.T, issueID string) int {
 	t.Helper()
 	var count int
 	err := testPool.QueryRow(context.Background(),
-		`SELECT count(*) FROM task_run WHERE task_id = $1 AND status IN ('queued', 'dispatched')`,
+		`SELECT count(*) FROM task WHERE issue_id = $1 AND status IN ('queued', 'dispatched')`,
 		issueID).Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to count pending tasks: %v", err)
@@ -52,7 +52,7 @@ func countPendingTasks(t *testing.T, issueID string) int {
 func clearTasks(t *testing.T, issueID string) {
 	t.Helper()
 	_, err := testPool.Exec(context.Background(),
-		`DELETE FROM task_run WHERE task_id = $1`, issueID)
+		`DELETE FROM task WHERE issue_id = $1`, issueID)
 	if err != nil {
 		t.Fatalf("failed to clear tasks: %v", err)
 	}
@@ -65,8 +65,8 @@ func latestTriggerCommentID(t *testing.T, issueID string) string {
 	var triggerID *string
 	err := testPool.QueryRow(context.Background(),
 		`SELECT trigger_comment_id::text
-		   FROM task_run
-		  WHERE task_id = $1 AND status IN ('queued', 'dispatched')
+		   FROM task
+		  WHERE issue_id = $1 AND status IN ('queued', 'dispatched')
 		  ORDER BY created_at DESC
 		  LIMIT 1`,
 		issueID).Scan(&triggerID)

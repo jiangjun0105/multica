@@ -290,10 +290,6 @@ func (h *Handler) CreatePipeline(w http.ResponseWriter, r *http.Request) {
 		if t.Suitability != nil {
 			suitability = pgtype.Text{String: *t.Suitability, Valid: true}
 		}
-		var transitionMode pgtype.Text
-		if t.TransitionMode != "" {
-			transitionMode = pgtype.Text{String: t.TransitionMode, Valid: true}
-		}
 		task, err := qtx.CreateTask(r.Context(), db.CreateTaskParams{
 			WorkspaceID:    wsUUID,
 			Number:         firstNumber + int32(i),
@@ -302,12 +298,10 @@ func (h *Handler) CreatePipeline(w http.ResponseWriter, r *http.Request) {
 			Status:         status,
 			Priority:       priority,
 			Suitability:    suitability,
-			IssueID:        issueUUID,
-			PipelineID:     pipeline.ID,
-			CreatorType:    actorType,
-			CreatorID:      actorUUID,
-			IsDraft:        pgtype.Bool{Bool: t.IsDraft, Valid: true},
-			TransitionMode: transitionMode,
+			IssueID:     issueUUID,
+			PipelineID:  pipeline.ID,
+			CreatorType: actorType,
+			CreatorID:   actorUUID,
 		})
 		if err != nil {
 			slog.Warn("create pipeline task failed", append(logger.RequestAttrs(r), "error", err, "index", i)...)
@@ -541,7 +535,7 @@ func rollupPipelineStatus(tasks []db.Task) string {
 			doneCount++
 		case "cancelled":
 			cancelledCount++
-		case "in_progress":
+		case "running", "dispatched", "queued":
 			runningCount++
 		}
 	}

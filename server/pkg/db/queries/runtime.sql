@@ -58,9 +58,9 @@ RETURNING id, workspace_id;
 -- name: FailTasksForOfflineRuntimes :many
 -- Marks dispatched/running tasks as failed when their runtime is offline.
 -- This cleans up orphaned tasks after a daemon crash or network partition.
-UPDATE task_run
+UPDATE task
 SET status = 'failed', completed_at = now(), error = 'runtime went offline',
-    failure_reason = 'runtime_offline'
+    failure_reason = 'runtime_offline', updated_at = now()
 WHERE status IN ('dispatched', 'running')
   AND runtime_id IN (
     SELECT id FROM agent_runtime WHERE status = 'offline'
@@ -109,10 +109,10 @@ SET runtime_id = @new_runtime_id
 WHERE runtime_id = @old_runtime_id;
 
 -- name: ReassignTasksToRuntime :execrows
--- Re-points every queued/running/completed task referencing old_runtime_id.
--- Required before deleting the old runtime row because task_run has
--- an ON DELETE CASCADE FK that would otherwise drop historical tasks.
-UPDATE task_run
+-- Re-points every task referencing old_runtime_id at new_runtime_id.
+-- Required before deleting the old runtime row because task has
+-- an ON DELETE SET NULL FK that would otherwise nullify runtime_id.
+UPDATE task
 SET runtime_id = @new_runtime_id
 WHERE runtime_id = @old_runtime_id;
 

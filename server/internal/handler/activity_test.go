@@ -239,7 +239,7 @@ func TestCreateComment_AgentWithWrongParentRejected(t *testing.T) {
 
 	var freshTaskID string
 	t.Cleanup(func() {
-		testPool.Exec(ctx, `DELETE FROM task_run WHERE id = $1`, freshTaskID)
+		testPool.Exec(ctx, `DELETE FROM task WHERE id = $1`, freshTaskID)
 		testPool.Exec(ctx, `DELETE FROM comment WHERE issue_id IN ($1, $2)`, issueA, issueB)
 		testPool.Exec(ctx, `DELETE FROM issue WHERE id IN ($1, $2)`, issueA, issueB)
 	})
@@ -272,9 +272,9 @@ func TestCreateComment_AgentWithWrongParentRejected(t *testing.T) {
 
 	// Comment-triggered task bound to issueA.
 	if err := testPool.QueryRow(ctx,
-		`INSERT INTO task_run (agent_id, runtime_id, task_id, status, priority, trigger_comment_id)
-		 VALUES ($1, $2, $3, 'queued', 0, $4) RETURNING id`,
-		agentID, runtimeID, issueA, freshParent.ID,
+		`INSERT INTO task (workspace_id, number, title, creator_type, creator_id, agent_id, runtime_id, issue_id, status, queue_priority, trigger_comment_id)
+		 VALUES ($1, 1001, 'test-task', 'agent', $2, $2, $3, $4, 'queued', 0, $5) RETURNING id`,
+		testWorkspaceID, agentID, runtimeID, issueA, freshParent.ID,
 	).Scan(&freshTaskID); err != nil {
 		t.Fatalf("insert fresh task: %v", err)
 	}

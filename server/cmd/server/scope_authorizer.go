@@ -13,7 +13,7 @@ import (
 // authorizer. Declared as an interface so the authorizer can be unit tested
 // with an in-memory fake (no DB required).
 type scopeAuthQuerier interface {
-	GetAgentTask(ctx context.Context, id pgtype.UUID) (db.TaskRun, error)
+	GetAgentTask(ctx context.Context, id pgtype.UUID) (db.Task, error)
 	GetIssue(ctx context.Context, id pgtype.UUID) (db.Issue, error)
 	GetChatSession(ctx context.Context, id pgtype.UUID) (db.ChatSession, error)
 }
@@ -47,8 +47,8 @@ func (a *dbScopeAuthorizer) AuthorizeScope(ctx context.Context, userID, workspac
 			return false, nil
 		}
 		// Issue tasks: visible to any workspace member.
-		if task.TaskID.Valid {
-			issue, err := a.q.GetIssue(ctx, task.TaskID)
+		if task.IssueID.Valid {
+			issue, err := a.q.GetIssue(ctx, task.IssueID)
 			if err != nil {
 				return false, nil
 			}
