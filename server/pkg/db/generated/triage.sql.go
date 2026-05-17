@@ -128,7 +128,7 @@ func (q *Queries) ListTaskDependenciesByTaskIDs(ctx context.Context, dollar_1 []
 }
 
 const listTasksByIssueID = `-- name: ListTasksByIssueID :many
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id, is_draft, transition_mode FROM task
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, creator_type, creator_id, created_at, updated_at, pipeline_id, agent_id, runtime_id, session_id, work_dir, dispatched_at, started_at, completed_at, result, error, failure_reason, attempt, max_attempts, last_heartbeat_at, parent_task_id, context, trigger_comment_id, trigger_summary, chat_session_id, force_fresh_session, queue_priority, config, current_turn, max_turns, crew_turn, active_agent_id, waiting_for FROM task
 WHERE issue_id = $1
 ORDER BY number ASC
 `
@@ -155,14 +155,37 @@ func (q *Queries) ListTasksByIssueID(ctx context.Context, issueID pgtype.UUID) (
 			&i.Pr,
 			&i.ManualTest,
 			&i.IssueID,
-			&i.CurrentRunID,
 			&i.CreatorType,
 			&i.CreatorID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PipelineID,
-			&i.IsDraft,
-			&i.TransitionMode,
+			&i.AgentID,
+			&i.RuntimeID,
+			&i.SessionID,
+			&i.WorkDir,
+			&i.DispatchedAt,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.Result,
+			&i.Error,
+			&i.FailureReason,
+			&i.Attempt,
+			&i.MaxAttempts,
+			&i.LastHeartbeatAt,
+			&i.ParentTaskID,
+			&i.Context,
+			&i.TriggerCommentID,
+			&i.TriggerSummary,
+			&i.ChatSessionID,
+			&i.ForceFreshSession,
+			&i.QueuePriority,
+			&i.Config,
+			&i.CurrentTurn,
+			&i.MaxTurns,
+			&i.CrewTurn,
+			&i.ActiveAgentID,
+			&i.WaitingFor,
 		); err != nil {
 			return nil, err
 		}

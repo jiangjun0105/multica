@@ -1358,30 +1358,10 @@ func (s *TaskService) broadcastTaskEvent(ctx context.Context, eventType string, 
 	})
 }
 
-// ResolveTaskWorkspaceID determines the workspace ID for a task.
-// For issue tasks, it comes from the issue. For chat tasks, from the chat session.
-// For autopilot tasks, from the autopilot via its run.
-// Returns "" when none of the links resolve — callers treat that as "not found".
-func (s *TaskService) ResolveTaskWorkspaceID(ctx context.Context, task db.Task) string {
-	if task.IssueID.Valid {
-		if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
-			return util.UUIDToString(issue.WorkspaceID)
-		}
-	}
-	if task.ChatSessionID.Valid {
-		if cs, err := s.Queries.GetChatSession(ctx, task.ChatSessionID); err == nil {
-			return util.UUIDToString(cs.WorkspaceID)
-		}
-	}
-	// Quick-create tasks have no issue / chat / autopilot link — workspace
-	// lives in the context JSONB. Returning "" here is what blocked
-	// requireDaemonTaskAccess (404 on /start, /progress, /complete, /fail
-	// for the daemon) and silently dropped task:dispatch / task:completed
-	// broadcasts, which is why quick-create tasks appeared stuck queued.
-	if qc, ok := s.parseQuickCreateContext(task); ok {
-		return qc.WorkspaceID
-	}
-	return ""
+// ResolveTaskWorkspaceID returns the workspace ID for a task.
+// The unified task table always has workspace_id populated directly.
+func (s *TaskService) ResolveTaskWorkspaceID(_ context.Context, task db.Task) string {
+	return util.UUIDToString(task.WorkspaceID)
 }
 
 func (s *TaskService) broadcastChatDone(ctx context.Context, task db.Task) {
