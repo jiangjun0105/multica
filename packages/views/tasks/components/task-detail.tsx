@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, ExternalLink, GitBranch, Link2 } from "lucide-react";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, ExternalLink, GitBranch, Link2, ScrollText } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { IssuePriority, TaskDependency } from "@multica/core/types";
 import { TASK_STATUS_CONFIG, TASK_PRIORITY_CONFIG } from "@multica/core/tasks/config";
@@ -18,6 +19,7 @@ import { openExternal } from "../../platform/open-external";
 import { TaskStatusIcon } from "./task-status-icon";
 import { PriorityIcon } from "../../issues/components/priority-icon";
 import { PropRow } from "../../common/prop-row";
+import { TaskConversationOverlay } from "./task-conversation-overlay";
 
 const SUITABILITY_LABELS: Record<string, string> = {
   auto_agent_ready: "Agent Ready",
@@ -30,11 +32,19 @@ interface TaskDetailProps {
   taskId: string;
 }
 
+function deriveBranchUrl(prUrl: string | null | undefined, branch: string): string | null {
+  if (!prUrl) return null;
+  const match = prUrl.match(/^(https:\/\/github\.com\/[^/]+\/[^/]+)\//);
+  if (!match) return null;
+  return `${match[1]}/tree/${encodeURIComponent(branch)}`;
+}
+
 export function TaskDetail({ taskId }: TaskDetailProps) {
   const wsId = useWorkspaceId();
   const workspace = useCurrentWorkspace();
   const paths = useWorkspacePaths();
   const router = useNavigation();
+  const [showTranscript, setShowTranscript] = useState(false);
 
   const { data: task, isLoading } = useQuery(planningTaskDetailOptions(wsId, taskId));
   const { data: deps = [] } = useQuery({
@@ -165,12 +175,26 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                 <span>{SUITABILITY_LABELS[task.suitability] ?? task.suitability}</span>
               </PropRow>
             )}
-            {task.branch && (
-              <PropRow label="Branch" interactive={false}>
-                <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
-                <span className="truncate">{task.branch}</span>
-              </PropRow>
-            )}
+            {task.branch && (() => {
+              const branchUrl = deriveBranchUrl(task.pr, task.branch);
+              return (
+                <PropRow label="Branch" interactive={false}>
+                  <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  {branchUrl ? (
+                    <a
+                      href={branchUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="truncate text-info hover:underline"
+                    >
+                      {task.branch}
+                    </a>
+                  ) : (
+                    <span className="truncate">{task.branch}</span>
+                  )}
+                </PropRow>
+              );
+            })()}
             {task.pr && (
               <PropRow label="PR" interactive={false}>
                 <Link2 className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -205,7 +229,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
             </div>
           )}
 
-          <div className="mt-6">
+          <div className="mt-6 space-y-2">
             <Button
               variant="outline"
               size="sm"
@@ -220,8 +244,29 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
               <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
               Dispatch
             </Button>
+            {task.current_run_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setShowTranscript((v) => !v)}
+              >
+                <ScrollText className="mr-1.5 h-3.5 w-3.5" />
+                {showTranscript ? "Hide log" : "Execution log"}
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Conversation overlay */}
+        {showTranscript && task.current_run_id && (
+          <div className="hidden md:flex w-[400px] shrink-0">
+            <TaskConversationOverlay
+              taskRunId={task.current_run_id}
+              onClose={() => setShowTranscript(false)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
