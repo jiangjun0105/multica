@@ -368,7 +368,7 @@ type GetIssueByOriginParams struct {
 
 // Finds the issue stamped with a specific (origin_type, origin_id) pair.
 // Used by quick-create completion to deterministically locate the issue
-// produced by a given task_run.id — robust against concurrent
+// produced by a given task.id — robust against concurrent
 // issue creates by the same agent (assignment task + quick-create both
 // running with max_concurrent_tasks > 1).
 func (q *Queries) GetIssueByOrigin(ctx context.Context, arg GetIssueByOriginParams) (Issue, error) {

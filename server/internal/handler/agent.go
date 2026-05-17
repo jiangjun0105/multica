@@ -163,7 +163,7 @@ type TaskAgentData struct {
 	Model        string                   `json:"model,omitempty"`
 }
 
-func taskToResponse(t db.TaskRun) AgentTaskResponse {
+func taskToResponse(t db.Task) AgentTaskResponse {
 	var result any
 	if t.Result != nil {
 		json.Unmarshal(t.Result, &result)
@@ -176,9 +176,9 @@ func taskToResponse(t db.TaskRun) AgentTaskResponse {
 		ID:               uuidToString(t.ID),
 		AgentID:          uuidToString(t.AgentID),
 		RuntimeID:        uuidToString(t.RuntimeID),
-		IssueID:          uuidToString(t.TaskID),
+		IssueID:          uuidToString(t.IssueID),
 		Status:           t.Status,
-		Priority:         t.Priority,
+		Priority:         t.QueuePriority,
 		DispatchedAt:     timestampToPtr(t.DispatchedAt),
 		StartedAt:        timestampToPtr(t.StartedAt),
 		CompletedAt:      timestampToPtr(t.CompletedAt),
@@ -205,11 +205,11 @@ func taskToResponse(t db.TaskRun) AgentTaskResponse {
 // triggered task with both an issue_id and trigger_comment_id) / quick_create
 // (no linked source — the agent is creating the issue itself) / direct
 // (assignee-driven task on an existing issue).
-func computeTaskKind(t db.TaskRun) string {
+func computeTaskKind(t db.Task) string {
 	if uuidToString(t.ChatSessionID) != "" {
 		return "chat"
 	}
-	if uuidToString(t.TaskID) == "" {
+	if uuidToString(t.IssueID) == "" {
 		return "quick_create"
 	}
 	if uuidToString(t.TriggerCommentID) != "" {

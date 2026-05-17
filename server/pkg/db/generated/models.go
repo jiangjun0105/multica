@@ -310,24 +310,49 @@ type SkillFile struct {
 }
 
 type Task struct {
-	ID           pgtype.UUID        `json:"id"`
-	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
-	Number       int32              `json:"number"`
-	Title        string             `json:"title"`
-	Description  string             `json:"description"`
-	Status       string             `json:"status"`
-	Priority     string             `json:"priority"`
-	Suitability  pgtype.Text        `json:"suitability"`
-	Branch       pgtype.Text        `json:"branch"`
-	Pr           pgtype.Text        `json:"pr"`
-	ManualTest   pgtype.Text        `json:"manual_test"`
-	IssueID      pgtype.UUID        `json:"issue_id"`
-	CurrentRunID pgtype.UUID        `json:"current_run_id"`
-	CreatorType  string             `json:"creator_type"`
-	CreatorID    pgtype.UUID        `json:"creator_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	PipelineID   pgtype.UUID        `json:"pipeline_id"`
+	ID                pgtype.UUID        `json:"id"`
+	WorkspaceID       pgtype.UUID        `json:"workspace_id"`
+	Number            int32              `json:"number"`
+	Title             string             `json:"title"`
+	Description       string             `json:"description"`
+	Status            string             `json:"status"`
+	Priority          string             `json:"priority"`
+	Suitability       pgtype.Text        `json:"suitability"`
+	Branch            pgtype.Text        `json:"branch"`
+	Pr                pgtype.Text        `json:"pr"`
+	ManualTest        pgtype.Text        `json:"manual_test"`
+	IssueID           pgtype.UUID        `json:"issue_id"`
+	CreatorType       string             `json:"creator_type"`
+	CreatorID         pgtype.UUID        `json:"creator_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	PipelineID        pgtype.UUID        `json:"pipeline_id"`
+	AgentID           pgtype.UUID        `json:"agent_id"`
+	RuntimeID         pgtype.UUID        `json:"runtime_id"`
+	SessionID         pgtype.Text        `json:"session_id"`
+	WorkDir           pgtype.Text        `json:"work_dir"`
+	DispatchedAt      pgtype.Timestamptz `json:"dispatched_at"`
+	StartedAt         pgtype.Timestamptz `json:"started_at"`
+	CompletedAt       pgtype.Timestamptz `json:"completed_at"`
+	Result            []byte             `json:"result"`
+	Error             pgtype.Text        `json:"error"`
+	FailureReason     pgtype.Text        `json:"failure_reason"`
+	Attempt           int32              `json:"attempt"`
+	MaxAttempts       int32              `json:"max_attempts"`
+	LastHeartbeatAt   pgtype.Timestamptz `json:"last_heartbeat_at"`
+	ParentTaskID      pgtype.UUID        `json:"parent_task_id"`
+	Context           []byte             `json:"context"`
+	TriggerCommentID  pgtype.UUID        `json:"trigger_comment_id"`
+	TriggerSummary    pgtype.Text        `json:"trigger_summary"`
+	ChatSessionID     pgtype.UUID        `json:"chat_session_id"`
+	ForceFreshSession bool               `json:"force_fresh_session"`
+	QueuePriority     int32              `json:"queue_priority"`
+	Config            []byte             `json:"config"`
+	CurrentTurn       int32              `json:"current_turn"`
+	MaxTurns          int32              `json:"max_turns"`
+	CrewTurn          int32              `json:"crew_turn"`
+	ActiveAgentID     pgtype.Text        `json:"active_agent_id"`
+	WaitingFor        pgtype.Text        `json:"waiting_for"`
 }
 
 type TaskDependency struct {
@@ -347,33 +372,6 @@ type TaskMessage struct {
 	Input     []byte             `json:"input"`
 	Output    pgtype.Text        `json:"output"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-type TaskRun struct {
-	ID                pgtype.UUID        `json:"id"`
-	AgentID           pgtype.UUID        `json:"agent_id"`
-	TaskID            pgtype.UUID        `json:"task_id"`
-	Status            string             `json:"status"`
-	Priority          int32              `json:"priority"`
-	DispatchedAt      pgtype.Timestamptz `json:"dispatched_at"`
-	StartedAt         pgtype.Timestamptz `json:"started_at"`
-	CompletedAt       pgtype.Timestamptz `json:"completed_at"`
-	Result            []byte             `json:"result"`
-	Error             pgtype.Text        `json:"error"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	Context           []byte             `json:"context"`
-	RuntimeID         pgtype.UUID        `json:"runtime_id"`
-	SessionID         pgtype.Text        `json:"session_id"`
-	WorkDir           pgtype.Text        `json:"work_dir"`
-	TriggerCommentID  pgtype.UUID        `json:"trigger_comment_id"`
-	ChatSessionID     pgtype.UUID        `json:"chat_session_id"`
-	Attempt           int32              `json:"attempt"`
-	MaxAttempts       int32              `json:"max_attempts"`
-	ParentTaskID      pgtype.UUID        `json:"parent_task_id"`
-	FailureReason     pgtype.Text        `json:"failure_reason"`
-	LastHeartbeatAt   pgtype.Timestamptz `json:"last_heartbeat_at"`
-	TriggerSummary    pgtype.Text        `json:"trigger_summary"`
-	ForceFreshSession bool               `json:"force_fresh_session"`
 }
 
 type TaskUsage struct {

@@ -1,4 +1,4 @@
--- Task planning queries (the "task" table — not task_run).
+-- Task planning queries (the "task" table — unified planning + execution).
 
 -- name: CreateTask :one
 INSERT INTO task (
@@ -43,7 +43,6 @@ UPDATE task SET
     pr = sqlc.narg('pr'),
     manual_test = sqlc.narg('manual_test'),
     issue_id = sqlc.narg('issue_id'),
-    current_run_id = sqlc.narg('current_run_id'),
     pipeline_id = sqlc.narg('pipeline_id'),
     updated_at = now()
 WHERE id = $1 AND workspace_id = $2

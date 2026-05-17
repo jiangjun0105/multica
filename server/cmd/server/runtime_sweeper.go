@@ -152,7 +152,7 @@ func sweepStaleTasks(ctx context.Context, queries *db.Queries, taskSvc *service.
 // in this package. New call sites should use TaskService.HandleFailedTasks
 // directly so the side effects (event broadcast, agent reconcile, issue
 // rollback, auto-retry) are guaranteed in one place.
-func broadcastFailedTasks(ctx context.Context, queries *db.Queries, taskSvc *service.TaskService, bus *events.Bus, tasks []db.TaskRun) {
+func broadcastFailedTasks(ctx context.Context, queries *db.Queries, taskSvc *service.TaskService, bus *events.Bus, tasks []db.Task) {
 	if taskSvc != nil {
 		taskSvc.HandleFailedTasks(ctx, tasks)
 		return

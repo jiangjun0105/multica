@@ -47,7 +47,7 @@ INSERT INTO task (
     $1, $2, $3, $4, $5, $6,
     $9, $10, $11,
     $12, $7, $8
-) RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id
+) RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, creator_type, creator_id, created_at, updated_at, pipeline_id, agent_id, runtime_id, session_id, work_dir, dispatched_at, started_at, completed_at, result, error, failure_reason, attempt, max_attempts, last_heartbeat_at, parent_task_id, context, trigger_comment_id, trigger_summary, chat_session_id, force_fresh_session, queue_priority, config, current_turn, max_turns, crew_turn, active_agent_id, waiting_for
 `
 
 type CreateTaskParams struct {
@@ -65,7 +65,7 @@ type CreateTaskParams struct {
 	PipelineID  pgtype.UUID `json:"pipeline_id"`
 }
 
-// Task planning queries (the "task" table — not task_run).
+// Task planning queries (the "task" table — unified planning + execution).
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
 	row := q.db.QueryRow(ctx, createTask,
 		arg.WorkspaceID,
@@ -95,12 +95,37 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Pr,
 		&i.ManualTest,
 		&i.IssueID,
-		&i.CurrentRunID,
 		&i.CreatorType,
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PipelineID,
+		&i.AgentID,
+		&i.RuntimeID,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.DispatchedAt,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.Result,
+		&i.Error,
+		&i.FailureReason,
+		&i.Attempt,
+		&i.MaxAttempts,
+		&i.LastHeartbeatAt,
+		&i.ParentTaskID,
+		&i.Context,
+		&i.TriggerCommentID,
+		&i.TriggerSummary,
+		&i.ChatSessionID,
+		&i.ForceFreshSession,
+		&i.QueuePriority,
+		&i.Config,
+		&i.CurrentTurn,
+		&i.MaxTurns,
+		&i.CrewTurn,
+		&i.ActiveAgentID,
+		&i.WaitingFor,
 	)
 	return i, err
 }
@@ -159,7 +184,7 @@ func (q *Queries) DeleteTaskDependency(ctx context.Context, arg DeleteTaskDepend
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id FROM task WHERE id = $1
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, creator_type, creator_id, created_at, updated_at, pipeline_id, agent_id, runtime_id, session_id, work_dir, dispatched_at, started_at, completed_at, result, error, failure_reason, attempt, max_attempts, last_heartbeat_at, parent_task_id, context, trigger_comment_id, trigger_summary, chat_session_id, force_fresh_session, queue_priority, config, current_turn, max_turns, crew_turn, active_agent_id, waiting_for FROM task WHERE id = $1
 `
 
 func (q *Queries) GetTask(ctx context.Context, id pgtype.UUID) (Task, error) {
@@ -178,18 +203,43 @@ func (q *Queries) GetTask(ctx context.Context, id pgtype.UUID) (Task, error) {
 		&i.Pr,
 		&i.ManualTest,
 		&i.IssueID,
-		&i.CurrentRunID,
 		&i.CreatorType,
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PipelineID,
+		&i.AgentID,
+		&i.RuntimeID,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.DispatchedAt,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.Result,
+		&i.Error,
+		&i.FailureReason,
+		&i.Attempt,
+		&i.MaxAttempts,
+		&i.LastHeartbeatAt,
+		&i.ParentTaskID,
+		&i.Context,
+		&i.TriggerCommentID,
+		&i.TriggerSummary,
+		&i.ChatSessionID,
+		&i.ForceFreshSession,
+		&i.QueuePriority,
+		&i.Config,
+		&i.CurrentTurn,
+		&i.MaxTurns,
+		&i.CrewTurn,
+		&i.ActiveAgentID,
+		&i.WaitingFor,
 	)
 	return i, err
 }
 
 const getTaskInWorkspace = `-- name: GetTaskInWorkspace :one
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id FROM task WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, creator_type, creator_id, created_at, updated_at, pipeline_id, agent_id, runtime_id, session_id, work_dir, dispatched_at, started_at, completed_at, result, error, failure_reason, attempt, max_attempts, last_heartbeat_at, parent_task_id, context, trigger_comment_id, trigger_summary, chat_session_id, force_fresh_session, queue_priority, config, current_turn, max_turns, crew_turn, active_agent_id, waiting_for FROM task WHERE id = $1 AND workspace_id = $2
 `
 
 type GetTaskInWorkspaceParams struct {
@@ -213,12 +263,37 @@ func (q *Queries) GetTaskInWorkspace(ctx context.Context, arg GetTaskInWorkspace
 		&i.Pr,
 		&i.ManualTest,
 		&i.IssueID,
-		&i.CurrentRunID,
 		&i.CreatorType,
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PipelineID,
+		&i.AgentID,
+		&i.RuntimeID,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.DispatchedAt,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.Result,
+		&i.Error,
+		&i.FailureReason,
+		&i.Attempt,
+		&i.MaxAttempts,
+		&i.LastHeartbeatAt,
+		&i.ParentTaskID,
+		&i.Context,
+		&i.TriggerCommentID,
+		&i.TriggerSummary,
+		&i.ChatSessionID,
+		&i.ForceFreshSession,
+		&i.QueuePriority,
+		&i.Config,
+		&i.CurrentTurn,
+		&i.MaxTurns,
+		&i.CrewTurn,
+		&i.ActiveAgentID,
+		&i.WaitingFor,
 	)
 	return i, err
 }
@@ -304,7 +379,7 @@ func (q *Queries) ListTaskDependents(ctx context.Context, dependsOnTaskID pgtype
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id FROM task
+SELECT id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, creator_type, creator_id, created_at, updated_at, pipeline_id, agent_id, runtime_id, session_id, work_dir, dispatched_at, started_at, completed_at, result, error, failure_reason, attempt, max_attempts, last_heartbeat_at, parent_task_id, context, trigger_comment_id, trigger_summary, chat_session_id, force_fresh_session, queue_priority, config, current_turn, max_turns, crew_turn, active_agent_id, waiting_for FROM task
 WHERE workspace_id = $1
   AND ($4::text IS NULL OR status = $4)
   AND ($5::text IS NULL OR priority = $5)
@@ -351,12 +426,37 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 			&i.Pr,
 			&i.ManualTest,
 			&i.IssueID,
-			&i.CurrentRunID,
 			&i.CreatorType,
 			&i.CreatorID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PipelineID,
+			&i.AgentID,
+			&i.RuntimeID,
+			&i.SessionID,
+			&i.WorkDir,
+			&i.DispatchedAt,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.Result,
+			&i.Error,
+			&i.FailureReason,
+			&i.Attempt,
+			&i.MaxAttempts,
+			&i.LastHeartbeatAt,
+			&i.ParentTaskID,
+			&i.Context,
+			&i.TriggerCommentID,
+			&i.TriggerSummary,
+			&i.ChatSessionID,
+			&i.ForceFreshSession,
+			&i.QueuePriority,
+			&i.Config,
+			&i.CurrentTurn,
+			&i.MaxTurns,
+			&i.CrewTurn,
+			&i.ActiveAgentID,
+			&i.WaitingFor,
 		); err != nil {
 			return nil, err
 		}
@@ -379,27 +479,25 @@ UPDATE task SET
     pr = $9,
     manual_test = $10,
     issue_id = $11,
-    current_run_id = $12,
-    pipeline_id = $13,
+    pipeline_id = $12,
     updated_at = now()
 WHERE id = $1 AND workspace_id = $2
-RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id
+RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, creator_type, creator_id, created_at, updated_at, pipeline_id, agent_id, runtime_id, session_id, work_dir, dispatched_at, started_at, completed_at, result, error, failure_reason, attempt, max_attempts, last_heartbeat_at, parent_task_id, context, trigger_comment_id, trigger_summary, chat_session_id, force_fresh_session, queue_priority, config, current_turn, max_turns, crew_turn, active_agent_id, waiting_for
 `
 
 type UpdateTaskParams struct {
-	ID           pgtype.UUID `json:"id"`
-	WorkspaceID  pgtype.UUID `json:"workspace_id"`
-	Title        pgtype.Text `json:"title"`
-	Description  pgtype.Text `json:"description"`
-	Status       pgtype.Text `json:"status"`
-	Priority     pgtype.Text `json:"priority"`
-	Suitability  pgtype.Text `json:"suitability"`
-	Branch       pgtype.Text `json:"branch"`
-	Pr           pgtype.Text `json:"pr"`
-	ManualTest   pgtype.Text `json:"manual_test"`
-	IssueID      pgtype.UUID `json:"issue_id"`
-	CurrentRunID pgtype.UUID `json:"current_run_id"`
-	PipelineID   pgtype.UUID `json:"pipeline_id"`
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Title       pgtype.Text `json:"title"`
+	Description pgtype.Text `json:"description"`
+	Status      pgtype.Text `json:"status"`
+	Priority    pgtype.Text `json:"priority"`
+	Suitability pgtype.Text `json:"suitability"`
+	Branch      pgtype.Text `json:"branch"`
+	Pr          pgtype.Text `json:"pr"`
+	ManualTest  pgtype.Text `json:"manual_test"`
+	IssueID     pgtype.UUID `json:"issue_id"`
+	PipelineID  pgtype.UUID `json:"pipeline_id"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error) {
@@ -415,7 +513,6 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		arg.Pr,
 		arg.ManualTest,
 		arg.IssueID,
-		arg.CurrentRunID,
 		arg.PipelineID,
 	)
 	var i Task
@@ -432,12 +529,37 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.Pr,
 		&i.ManualTest,
 		&i.IssueID,
-		&i.CurrentRunID,
 		&i.CreatorType,
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PipelineID,
+		&i.AgentID,
+		&i.RuntimeID,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.DispatchedAt,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.Result,
+		&i.Error,
+		&i.FailureReason,
+		&i.Attempt,
+		&i.MaxAttempts,
+		&i.LastHeartbeatAt,
+		&i.ParentTaskID,
+		&i.Context,
+		&i.TriggerCommentID,
+		&i.TriggerSummary,
+		&i.ChatSessionID,
+		&i.ForceFreshSession,
+		&i.QueuePriority,
+		&i.Config,
+		&i.CurrentTurn,
+		&i.MaxTurns,
+		&i.CrewTurn,
+		&i.ActiveAgentID,
+		&i.WaitingFor,
 	)
 	return i, err
 }
@@ -447,7 +569,7 @@ UPDATE task SET
     status = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, current_run_id, creator_type, creator_id, created_at, updated_at, pipeline_id
+RETURNING id, workspace_id, number, title, description, status, priority, suitability, branch, pr, manual_test, issue_id, creator_type, creator_id, created_at, updated_at, pipeline_id, agent_id, runtime_id, session_id, work_dir, dispatched_at, started_at, completed_at, result, error, failure_reason, attempt, max_attempts, last_heartbeat_at, parent_task_id, context, trigger_comment_id, trigger_summary, chat_session_id, force_fresh_session, queue_priority, config, current_turn, max_turns, crew_turn, active_agent_id, waiting_for
 `
 
 type UpdateTaskStatusParams struct {
@@ -471,12 +593,37 @@ func (q *Queries) UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusPara
 		&i.Pr,
 		&i.ManualTest,
 		&i.IssueID,
-		&i.CurrentRunID,
 		&i.CreatorType,
 		&i.CreatorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PipelineID,
+		&i.AgentID,
+		&i.RuntimeID,
+		&i.SessionID,
+		&i.WorkDir,
+		&i.DispatchedAt,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.Result,
+		&i.Error,
+		&i.FailureReason,
+		&i.Attempt,
+		&i.MaxAttempts,
+		&i.LastHeartbeatAt,
+		&i.ParentTaskID,
+		&i.Context,
+		&i.TriggerCommentID,
+		&i.TriggerSummary,
+		&i.ChatSessionID,
+		&i.ForceFreshSession,
+		&i.QueuePriority,
+		&i.Config,
+		&i.CurrentTurn,
+		&i.MaxTurns,
+		&i.CrewTurn,
+		&i.ActiveAgentID,
+		&i.WaitingFor,
 	)
 	return i, err
 }

@@ -240,7 +240,7 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 			taskUUID, parseErr := util.ParseUUID(taskIDHeader)
 			if parseErr == nil {
 				task, err := h.Queries.GetAgentTask(r.Context(), taskUUID)
-				if err == nil && task.TriggerCommentID.Valid && uuidToString(task.TaskID) == uuidToString(issue.ID) {
+				if err == nil && task.TriggerCommentID.Valid && uuidToString(task.IssueID) == uuidToString(issue.ID) {
 					if uuidToString(parentID) != uuidToString(task.TriggerCommentID) {
 						writeError(w, http.StatusConflict,
 							"parent_id must equal this task's trigger comment id ("+uuidToString(task.TriggerCommentID)+")")
